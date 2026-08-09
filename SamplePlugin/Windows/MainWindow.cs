@@ -7,7 +7,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Lumina.Excel.Sheets;
 
-namespace SamplePlugin.Windows;
+namespace Nonuglon.Windows;
 
 public class MainWindow : Window, IDisposable
 {
@@ -34,7 +34,7 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        ImGui.Text($"The random config bool is {plugin.Configuration.SomePropertyToBeSavedAndWithADefault}");
+        ImGui.Text($"{plugin.Tweaks.Count} tweaks loaded ({plugin.Tweaks.FindAll(t => t.Enabled).Count} enabled)");
 
         if (ImGui.Button("Show Settings"))
         {

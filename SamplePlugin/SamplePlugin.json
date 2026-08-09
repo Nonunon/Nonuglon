@@ -1,12 +1,12 @@
 {
-  "Author": "your name here",
-  "Name": "Sample Plugin",
-  "Punchline": "A short one-liner that shows up in /xlplugins.",
-  "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
+  "Author": "Nonu",
+  "Name": "Nonuglon",
+  "InternalName": "Nonuglon",
+  "Punchline": "Nonu's personal grab-bag of tweaks.",
+  "Description": "Quick Return, Auto Pillion, and a saddlebag entrust-duplicates button for AetherBags.",
   "ApplicableVersion": "any",
   "Tags": [
-    "sample",
-    "plugin",
-    "goats"
+    "tweaks",
+    "automation"
   ]
 }

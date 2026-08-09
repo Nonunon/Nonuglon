@@ -2,6 +2,13 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <Version>0.0.0.1</Version>
+    <AssemblyName>Nonuglon</AssemblyName>
+    <RootNamespace>Nonuglon</RootNamespace>
+    <Author>Nonu</Author>
+    <Name>Nonuglon</Name>
+    <InternalName>Nonuglon</InternalName>
+    <Punchline>Nonu's personal grab-bag of tweaks.</Punchline>
+    <Description>Quick Return, Auto Pillion, and a saddlebag entrust-duplicates button for AetherBags.</Description>
     <PackageProjectUrl>https://github.com/goatcorp/SamplePlugin</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
@@ -12,5 +19,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ECommons" Version="3.2.1.15" />
   </ItemGroup>
 </Project>
