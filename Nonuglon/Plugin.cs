@@ -147,9 +147,9 @@ public sealed class Plugin : IDalamudPlugin
 
         if (parts[1].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
         {
-            if (parts.Length < 3 || !TryParseBool(parts[2], out var leaveParty))
+            if (parts.Length < 3 || !ResolveBool(parts[2], Configuration.InstantReturnLeaveParty, out var leaveParty))
             {
-                Print("Usage: /Nonuglon instantreturn leaveparty <on|off>");
+                Print("Usage: /Nonuglon instantreturn leaveparty <on|off|toggle>");
                 return;
             }
 
@@ -159,9 +159,9 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
-        if (!TryParseBool(parts[1], out var enabled))
+        if (!ResolveBool(parts[1], Configuration.InstantReturnEnabled, out var enabled))
         {
-            Print("Usage: /Nonuglon instantreturn <on|off>");
+            Print("Usage: /Nonuglon instantreturn <on|off|toggle>");
             return;
         }
 
@@ -178,9 +178,9 @@ public sealed class Plugin : IDalamudPlugin
         switch (parts[1].ToLowerInvariant())
         {
             case "restrict":
-                if (parts.Length < 3 || !TryParseBool(parts[2], out var restrict))
+                if (parts.Length < 3 || !ResolveBool(parts[2], Configuration.AutoPillionRestrictToPerson, out var restrict))
                 {
-                    Print("Usage: /Nonuglon autopillion restrict <on|off>");
+                    Print("Usage: /Nonuglon autopillion restrict <on|off|toggle>");
                     return;
                 }
                 Configuration.AutoPillionRestrictToPerson = restrict;
@@ -211,9 +211,9 @@ public sealed class Plugin : IDalamudPlugin
                 return;
 
             default:
-                if (!TryParseBool(parts[1], out var enabled))
+                if (!ResolveBool(parts[1], Configuration.AutoPillionEnabled, out var enabled))
                 {
-                    Print("Usage: /Nonuglon autopillion <on|off>");
+                    Print("Usage: /Nonuglon autopillion <on|off|toggle>");
                     return;
                 }
                 Configuration.AutoPillionEnabled = enabled;
@@ -226,9 +226,9 @@ public sealed class Plugin : IDalamudPlugin
 
     private void HandleEntrustCommand(string[] parts)
     {
-        if (parts.Length < 2 || !TryParseBool(parts[1], out var enabled))
+        if (parts.Length < 2 || !ResolveBool(parts[1], Configuration.EntrustChocoboDuplicatesEnabled, out var enabled))
         {
-            Print("Usage: /Nonuglon entrustchocobo <on|off>");
+            Print("Usage: /Nonuglon entrustchocobo <on|off|toggle>");
             return;
         }
 
@@ -254,19 +254,33 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
+    /// <summary>Same as TryParseBool, but also accepts "toggle" to flip whatever the
+    /// current value already is - handy for macros/hotkeys where you don't want to
+    /// track state yourself.</summary>
+    private static bool ResolveBool(string s, bool currentValue, out bool value)
+    {
+        if (s.Equals("toggle", StringComparison.OrdinalIgnoreCase))
+        {
+            value = !currentValue;
+            return true;
+        }
+
+        return TryParseBool(s, out value);
+    }
+
     private static void Print(string message) => ChatGui.Print($"[Nonuglon] {message}");
 
     private static void PrintUsage()
     {
         Print("Usage:");
         Print("  /Nonuglon - open settings window");
-        Print("  /Nonuglon instantreturn <on|off>");
-        Print("  /Nonuglon instantreturn leaveparty <on|off>");
-        Print("  /Nonuglon autopillion <on|off>");
-        Print("  /Nonuglon autopillion restrict <on|off>");
+        Print("  /Nonuglon instantreturn <on|off|toggle>");
+        Print("  /Nonuglon instantreturn leaveparty <on|off|toggle>");
+        Print("  /Nonuglon autopillion <on|off|toggle>");
+        Print("  /Nonuglon autopillion restrict <on|off|toggle>");
         Print("  /Nonuglon autopillion target <name|clear>");
         Print("  /Nonuglon autopillion timeout <ms, 500-10000>");
-        Print("  /Nonuglon entrustchocobo <on|off>");
+        Print("  /Nonuglon entrustchocobo <on|off|toggle>");
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
