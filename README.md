@@ -11,14 +11,14 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 ## Commands
 
 ```
-/Nonuglon                                    open the settings window
-/Nonuglon help                               list these commands in chat
+/Nonuglon                                    
+/Nonuglon help                               
 /Nonuglon instantreturn <on|off>
 /Nonuglon instantreturn leaveparty <on|off>
 /Nonuglon autopillion <on|off>
-/Nonuglon autopillion restrict <on|off>       restrict to one person instead of anyone in party
+/Nonuglon autopillion restrict <on|off>      
 /Nonuglon autopillion target <name|clear>
-/Nonuglon autopillion timeout <ms>            500-10000, how long to wait before retrying a failed mount attempt
+/Nonuglon autopillion timeout <ms>            500-10000 ms
 /Nonuglon entrustchocobo <on|off>
 ```
 
@@ -28,8 +28,8 @@ Accepts `on/off`, `true/false`, `1/0`, `yes/no`, or `enable/disable` for any boo
 
 1. Open `Nonuglon.sln` in Visual Studio or Rider and build (Debug or Release).
 2. The built plugin goes to `Nonuglon/bin/x64/Debug/Nonuglon.dll` (or `Release`).
-3. In-game: `/xlsettings` → Experimental → add the full path to `Nonuglon.dll` under Dev Plugin Locations.
-4. `/xlplugins` → Dev Tools → Installed Dev Plugins → enable Nonuglon.
+3. In-game: `/xlsettings` -> Experimental -> add the full path to `Nonuglon.dll` under Dev Plugin Locations.
+4. `/xlplugins` -> Dev Tools -> Installed Dev Plugins -> enable Nonuglon.
 
 ## Credit
 
