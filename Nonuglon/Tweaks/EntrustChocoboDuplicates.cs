@@ -43,7 +43,13 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         Svc.PluginInterface.InstalledPlugins.Any(x => x.IsLoaded && x.InternalName == AetherBagsPluginInternalName);
 
     protected override void Enable() => Svc.PluginInterface.UiBuilder.Draw += Draw;
-    protected override void Disable() => Svc.PluginInterface.UiBuilder.Draw -= Draw;
+
+    protected override void Disable()
+    {
+        Svc.PluginInterface.UiBuilder.Draw -= Draw;
+        if (taskManager.NumQueuedTasks > 0)
+            taskManager.Abort();
+    }
 
     private void Draw()
     {

@@ -8,8 +8,6 @@ public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 0;
 
-    public bool IsConfigWindowMovable { get; set; } = true;
-
     // -- Tweak toggles --
     public bool InstantReturnEnabled { get; set; } = true;
     public bool InstantReturnLeaveParty { get; set; } = true;

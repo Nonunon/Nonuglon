@@ -29,7 +29,7 @@ namespace Nonuglon.Tweaks;
 public unsafe class InstantReturn : TweakBase
 {
     public override string Name => "Quick Return";
-    public override string Description => "Calls Return directly instead of clicking through the confirmation dialog. Optionally leaves/disbands your party first.";
+    public override string Description => "Calls the Return function directly and unconditionally - a hack that skips the confirmation dialog and fires regardless of whether Return is actually valid right now. Optionally leaves/disbands your party first.";
 
     private const int ReturnGeneralActionId = 8;
 
