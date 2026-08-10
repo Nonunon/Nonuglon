@@ -9,7 +9,6 @@
     <InternalName>Nonuglon</InternalName>
     <Punchline>Nonu's personal grab-bag of tweaks.</Punchline>
     <Description>Quick Return, Auto Pillion, and a saddlebag entrust-duplicates button for AetherBags.</Description>
-    <PackageProjectUrl>https://github.com/goatcorp/SamplePlugin</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
