@@ -1,9 +1,12 @@
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
 using ECommons.Automation.NeoTaskManager;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
@@ -11,17 +14,17 @@ namespace Nonuglon.Tweaks;
 /// <summary>
 /// Ported from ffxiv-bundleoftweaks' Tweaks/InstantReturn.cs.
 ///
-/// The original used a custom [AddressHook&lt;T&gt;] attribute + source generator
-/// (from the InteropSourceGenerators submodule) to wire up the hook. We're not
-/// vendoring that toolchain, so this hooks AgentReturn.Return directly via its
-/// already-resolved MemberFunctionPointers address instead - same net effect,
-/// no source generator required.
+/// The original used a custom [AddressHook&lt;T&gt;] attribute + source generator to
+/// wire up the hook. We're not vendoring that toolchain, so this hooks
+/// AgentReturn.Return directly via its already-resolved MemberFunctionPointers
+/// address instead - confirmed to generate identical code to what the real
+/// generator produces.
 ///
-/// The actual teleport is fired via GameMain.ExecuteCommand(214) - see
-/// Support/GameCommandIds.cs - NOT via the Return general action. UseAction on the
-/// general action just re-triggers the same AgentReturn flow that opens the
-/// confirmation dialog (which is what we're hooking to bypass in the first place),
-/// so it can't be used as the trigger here.
+/// The direct teleport is fired via GameMain.ExecuteCommand(214) - see
+/// Support/GameCommandIds.cs. The SelectYesno auto-click listener is NOT
+/// redundant with that - it's what handles the case where Original(agent) still
+/// opens the real confirmation dialog (general action not instantly ready), which
+/// the original design expects and clicks through.
 /// </summary>
 public unsafe class InstantReturn : TweakBase
 {
@@ -38,11 +41,14 @@ public unsafe class InstantReturn : TweakBase
         returnHook ??= Svc.Hook.HookFromAddress<AgentReturn.Delegates.Return>(
             (nint)AgentReturn.MemberFunctionPointers.Return, ReturnDetour);
         returnHook.Enable();
+
+        Svc.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectYesno", HandleSelectYesno);
     }
 
     protected override void Disable()
     {
         returnHook?.Disable();
+        Svc.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectYesno", HandleSelectYesno);
         if (taskManager.NumQueuedTasks > 0)
             taskManager.Abort();
     }
@@ -57,32 +63,50 @@ public unsafe class InstantReturn : TweakBase
     {
         // Deliberately NOT an if/else, and no early return: the original tweak calls
         // Original(agent) as a side effect when the general action reads as unavailable
-        // (letting the base UI/animation state settle), but ALWAYS fires the direct
-        // command below regardless of that check. That's the whole "hack" - it wins
-        // the race against the confirmation dialog instead of waiting to see if the
-        // dialog was needed.
+        // (which opens the real confirmation dialog - HandleSelectYesno below clicks
+        // it through), but ALWAYS fires the direct command regardless of that check.
         if (ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, ReturnGeneralActionId) != 0)
             returnHook!.Original(agent);
 
         if (Plugin.Configuration.InstantReturnLeaveParty)
             StartLeaveThenReturn();
         else
-            GameMain.ExecuteCommand(GameCommandIds.ReturnIfNotLalafell, 0, 0, 0, 0);
+            FireReturnCommand();
     }
 
     private void StartLeaveThenReturn()
     {
+        if (!InfoProxyCrossRealm.IsLocalPlayerInParty())
+        {
+            FireReturnCommand();
+            return;
+        }
+
+        // Matches the original's WaitUntil(Disband/Leave) exactly: call the
+        // disband/leave function itself every tick until IT returns true, rather
+        // than calling it once and separately polling party membership. If the
+        // first call fails (not ready, rate limited, whatever), this keeps retrying
+        // instead of silently giving up.
+        if (InfoProxyCrossRealm.IsLocalPlayerPartyLeader())
+            taskManager.Enqueue(() => InfoProxyPartyMember.Instance()->DisbandParty(), "InstantReturn: wait for disband");
+        else
+            taskManager.Enqueue(() => InfoProxyPartyMember.Instance()->LeaveParty(), "InstantReturn: wait for leave");
+
         taskManager.Enqueue(() =>
         {
-            if (!InfoProxyCrossRealm.IsLocalPlayerInParty()) return true;
-            if (InfoProxyCrossRealm.IsLocalPlayerPartyLeader())
-                InfoProxyPartyMember.Instance()->DisbandParty();
-            else
-                InfoProxyPartyMember.Instance()->LeaveParty();
+            FireReturnCommand();
             return true;
-        }, "InstantReturn: leave/disband party");
+        }, "InstantReturn: fire Return");
+    }
 
-        taskManager.Enqueue(() => !InfoProxyCrossRealm.IsLocalPlayerInParty(), "InstantReturn: wait for party to clear");
-        taskManager.Enqueue(() => GameMain.ExecuteCommand(GameCommandIds.ReturnIfNotLalafell, 0, 0, 0, 0), "InstantReturn: fire Return");
+    private static void FireReturnCommand() =>
+        GameMain.ExecuteCommand(GameCommandIds.ReturnIfNotLalafell, 0, 0, 0, 0);
+
+    private void HandleSelectYesno(AddonEvent type, AddonArgs args)
+    {
+        var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Return);
+        if (agent is null || agent->AddonId != args.Addon.Id) return;
+
+        args.ReceiveEvent(AtkEventType.ButtonClick, 0);
     }
 }

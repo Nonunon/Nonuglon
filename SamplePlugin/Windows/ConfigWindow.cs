@@ -78,6 +78,15 @@ public class ConfigWindow : Window, IDisposable
             configuration.AutoPillionTargetName = targetName;
             configuration.Save();
         }
+
+        var retryTimeout = configuration.AutoPillionRetryTimeoutMs;
+        if (ImGui.SliderInt("Retry timeout (ms)##AutoPillion", ref retryTimeout, 500, 10000))
+        {
+            configuration.AutoPillionRetryTimeoutMs = retryTimeout;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
         ImGui.Unindent();
 
         ImGui.Spacing();

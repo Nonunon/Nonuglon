@@ -17,6 +17,10 @@ public class Configuration : IPluginConfiguration
     public bool AutoPillionEnabled { get; set; } = true;
     public bool AutoPillionRestrictToPerson { get; set; } = false;
     public string AutoPillionTargetName { get; set; } = string.Empty;
+    /// <summary>How long (ms) to wait for a ride/mount attempt to land before giving
+    /// up and letting OnUpdate retry. TaskManager's default wait timeout is ~30s,
+    /// which is way too long for a "just try again" tweak like this.</summary>
+    public int AutoPillionRetryTimeoutMs { get; set; } = 2000;
 
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = true;
 

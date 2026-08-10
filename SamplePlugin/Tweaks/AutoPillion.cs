@@ -1,9 +1,8 @@
+using System;
 using System.Linq;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
-using ECommons.Automation.NeoTaskManager;
 using ECommons.DalamudServices;
 using Nonuglon.Support;
 
@@ -13,39 +12,45 @@ namespace Nonuglon.Tweaks;
 /// Ported from ffxiv-bundleoftweaks' Tweaks/AutoPillion.cs.
 /// Automatically hops onto a nearby mount with an open pillion seat.
 /// Optionally restricted to one named person via config.
+///
+/// No TaskManager here on purpose: a single RidePillion call doesn't need a task
+/// queue, and ECommons' TaskManager wait-timeout defaults to ~30s, which made a
+/// missed attempt (dismount, target out of range mid-ride, etc.) lock the tweak up
+/// for way too long. A plain timestamp-based retry throttle is simpler and its
+/// timeout is fully in our control via AutoPillionRetryTimeoutMs.
 /// </summary>
 public unsafe class AutoPillion : TweakBase
 {
     public override string Name => "Auto Pillion";
     public override string Description => "Automatically hops onto a nearby mount with an open pillion seat. Optionally restrict to one specific person.";
 
-    private readonly TaskManager taskManager = new();
+    /// <summary>0 = idle/not attempting. Otherwise, the Environment.TickCount64 at
+    /// which the current attempt should be considered timed out.</summary>
+    private long attemptExpiresAt;
 
     protected override void Enable() => Svc.Framework.Update += OnUpdate;
 
     protected override void Disable()
     {
         Svc.Framework.Update -= OnUpdate;
-        if (taskManager.NumQueuedTasks > 0)
-            taskManager.Abort();
+        attemptExpiresAt = 0;
     }
 
     private void OnUpdate(IFramework framework)
     {
         var player = Svc.Objects.LocalPlayer;
-        if (player is null || Svc.Condition[ConditionFlag.Mounted])
+        if (player is null || player.IsMounted())
         {
-            if (taskManager.NumQueuedTasks > 0)
-                taskManager.Abort();
+            attemptExpiresAt = 0;
             return;
         }
 
-        // Already mid-attempt: a ride command was just sent and we're waiting on
-        // the Mounted condition to flip. Without this guard, OnUpdate re-fires every
-        // single frame while still in range and not yet mounted, stacking a fresh
-        // ride+wait attempt on top of the one still in flight - that's the "fires
-        // once, errors, fires again" loop.
-        if (taskManager.NumQueuedTasks > 0) return;
+        // Still within the current attempt's window - don't spam RidePillion every
+        // frame while waiting to see if the last attempt lands. Once the window
+        // passes without us getting mounted, this falls through and tries again.
+        if (attemptExpiresAt != 0 && Environment.TickCount64 < attemptExpiresAt)
+            return;
+        attemptExpiresAt = 0;
 
         var config = Plugin.Configuration;
 
@@ -72,9 +77,8 @@ public unsafe class AutoPillion : TweakBase
 
     private void MountUpWith(IGameObject target)
     {
-        var name = target.Name.TextValue;
-        taskManager.Enqueue(() => Svc.Log.Debug($"[AutoPillion] Mounting up with {name}"), "AutoPillion: log");
-        taskManager.Enqueue(() => target.BattleChara()->RidePillion(10), "AutoPillion: ride");
-        taskManager.Enqueue(() => Svc.Condition[ConditionFlag.Mounted], "AutoPillion: wait for mount");
+        Svc.Log.Debug($"[AutoPillion] Mounting up with {target.Name.TextValue}");
+        target.BattleChara()->RidePillion(10);
+        attemptExpiresAt = Environment.TickCount64 + Plugin.Configuration.AutoPillionRetryTimeoutMs;
     }
 }

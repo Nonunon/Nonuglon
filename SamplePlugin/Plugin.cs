@@ -1,8 +1,10 @@
 ﻿using Dalamud.Game.Command;
 using Dalamud.IoC;
 using Dalamud.Plugin;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using ECommons;
@@ -19,6 +21,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private const string CommandName = "/Nonuglon";
@@ -49,7 +52,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the Nonuglon tweak settings."
+            HelpMessage = "Opens Nonuglon settings. See /Nonuglon help for subcommands."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -94,10 +97,184 @@ public sealed class Plugin : IDalamudPlugin
         ECommonsMain.Dispose();
     }
 
+    /// <summary>Finds the loaded tweak of type T and enables/disables it. Used by
+    /// both the config window checkboxes and the slash command handler, so the two
+    /// stay in sync with each other and with Configuration.</summary>
+    public bool SetTweakEnabled<T>(bool enabled) where T : TweakBase
+    {
+        var tweak = Tweaks.Find(t => t is T);
+        if (tweak is null) return false;
+
+        if (enabled) tweak.EnableTweak();
+        else tweak.DisableTweak();
+
+        return true;
+    }
+
     private void OnCommand(string command, string args)
     {
-        // In response to the slash command, toggle the display status of our main ui
-        ToggleConfigUi();
+        var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            ToggleConfigUi();
+            return;
+        }
+
+        switch (parts[0].ToLowerInvariant())
+        {
+            case "instantreturn":
+            case "quickreturn":
+                HandleInstantReturnCommand(parts);
+                break;
+            case "autopillion":
+            case "pillion":
+                HandleAutoPillionCommand(parts);
+                break;
+            case "entrustchocobo":
+            case "entrust":
+            case "chocobo":
+                HandleEntrustCommand(parts);
+                break;
+            case "config":
+            case "settings":
+                ToggleConfigUi();
+                break;
+            case "help":
+            case "?":
+                PrintUsage();
+                break;
+            default:
+                Print($"Unknown subcommand \"{parts[0]}\". Try /Nonuglon help.");
+                break;
+        }
+    }
+
+    private void HandleInstantReturnCommand(string[] parts)
+    {
+        if (parts.Length < 2) { PrintUsage(); return; }
+
+        if (parts[1].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
+        {
+            if (parts.Length < 3 || !TryParseBool(parts[2], out var leaveParty))
+            {
+                Print("Usage: /Nonuglon instantreturn leaveparty <on|off>");
+                return;
+            }
+
+            Configuration.InstantReturnLeaveParty = leaveParty;
+            Configuration.Save();
+            Print($"Quick Return: leave party first {(leaveParty ? "enabled" : "disabled")}.");
+            return;
+        }
+
+        if (!TryParseBool(parts[1], out var enabled))
+        {
+            Print("Usage: /Nonuglon instantreturn <on|off>");
+            return;
+        }
+
+        Configuration.InstantReturnEnabled = enabled;
+        Configuration.Save();
+        SetTweakEnabled<InstantReturn>(enabled);
+        Print($"Quick Return {(enabled ? "enabled" : "disabled")}.");
+    }
+
+    private void HandleAutoPillionCommand(string[] parts)
+    {
+        if (parts.Length < 2) { PrintUsage(); return; }
+
+        switch (parts[1].ToLowerInvariant())
+        {
+            case "restrict":
+                if (parts.Length < 3 || !TryParseBool(parts[2], out var restrict))
+                {
+                    Print("Usage: /Nonuglon autopillion restrict <on|off>");
+                    return;
+                }
+                Configuration.AutoPillionRestrictToPerson = restrict;
+                Configuration.Save();
+                Print($"Auto Pillion: restrict to one person {(restrict ? "enabled" : "disabled")}.");
+                return;
+
+            case "target":
+                var name = string.Join(' ', parts.Skip(2));
+                if (name.Equals("clear", StringComparison.OrdinalIgnoreCase) || name.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    name = string.Empty;
+
+                Configuration.AutoPillionTargetName = name;
+                Configuration.Save();
+                Print(string.IsNullOrEmpty(name) ? "Auto Pillion: target cleared." : $"Auto Pillion: target set to \"{name}\".");
+                return;
+
+            case "timeout":
+                if (parts.Length < 3 || !int.TryParse(parts[2], out var ms))
+                {
+                    Print("Usage: /Nonuglon autopillion timeout <ms, 500-10000>");
+                    return;
+                }
+                ms = Math.Clamp(ms, 500, 10000);
+                Configuration.AutoPillionRetryTimeoutMs = ms;
+                Configuration.Save();
+                Print($"Auto Pillion: retry timeout set to {ms}ms.");
+                return;
+
+            default:
+                if (!TryParseBool(parts[1], out var enabled))
+                {
+                    Print("Usage: /Nonuglon autopillion <on|off>");
+                    return;
+                }
+                Configuration.AutoPillionEnabled = enabled;
+                Configuration.Save();
+                SetTweakEnabled<AutoPillion>(enabled);
+                Print($"Auto Pillion {(enabled ? "enabled" : "disabled")}.");
+                return;
+        }
+    }
+
+    private void HandleEntrustCommand(string[] parts)
+    {
+        if (parts.Length < 2 || !TryParseBool(parts[1], out var enabled))
+        {
+            Print("Usage: /Nonuglon entrustchocobo <on|off>");
+            return;
+        }
+
+        Configuration.EntrustChocoboDuplicatesEnabled = enabled;
+        Configuration.Save();
+        SetTweakEnabled<EntrustChocoboDuplicates>(enabled);
+        Print($"Saddlebag Entrust Duplicates {(enabled ? "enabled" : "disabled")}.");
+    }
+
+    private static bool TryParseBool(string s, out bool value)
+    {
+        switch (s.ToLowerInvariant())
+        {
+            case "true": case "on": case "1": case "yes": case "enable": case "enabled":
+                value = true;
+                return true;
+            case "false": case "off": case "0": case "no": case "disable": case "disabled":
+                value = false;
+                return true;
+            default:
+                value = false;
+                return false;
+        }
+    }
+
+    private static void Print(string message) => ChatGui.Print($"[Nonuglon] {message}");
+
+    private static void PrintUsage()
+    {
+        Print("Usage:");
+        Print("  /Nonuglon - open settings window");
+        Print("  /Nonuglon instantreturn <on|off>");
+        Print("  /Nonuglon instantreturn leaveparty <on|off>");
+        Print("  /Nonuglon autopillion <on|off>");
+        Print("  /Nonuglon autopillion restrict <on|off>");
+        Print("  /Nonuglon autopillion target <name|clear>");
+        Print("  /Nonuglon autopillion timeout <ms, 500-10000>");
+        Print("  /Nonuglon entrustchocobo <on|off>");
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();

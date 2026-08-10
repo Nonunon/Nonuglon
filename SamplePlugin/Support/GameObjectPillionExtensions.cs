@@ -15,6 +15,14 @@ public static unsafe class GameObjectPillionExtensions
     public static Character* Character(this IGameObject obj) => (Character*)obj.Address;
     public static BattleChara* BattleChara(this IGameObject obj) => (BattleChara*)obj.Address;
 
+    /// <summary>
+    /// True whether this object is riding as the mount's driver OR as a pillion
+    /// passenger. ConditionFlag.Mounted (Dalamud's usual "am I mounted" check) only
+    /// reflects being the driver, so it never flips for a passenger - reading the
+    /// Mount struct's MountId directly works for both.
+    /// </summary>
+    public static bool IsMounted(this IGameObject? obj) => obj != null && obj.Character()->Mount.MountId != 0;
+
     public static bool CanRidePillion(this IGameObject? obj)
     {
         if (obj == null) return false;
