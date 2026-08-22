@@ -1,5 +1,7 @@
 # Nonuglon
 
+[![AI-DECLARATION: copilot](https://img.shields.io/badge/%E4%B7%BC%20AI--DECLARATION-copilot-fee2e2?labelColor=fee2e2)](./AI-DECLARATION.md)
+
 My own personal grab-bag of tweaks. Just the handful of things I actually wanted.
 
 ## Tweaks
