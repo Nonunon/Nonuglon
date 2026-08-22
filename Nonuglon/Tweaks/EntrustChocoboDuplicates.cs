@@ -23,7 +23,7 @@ namespace Nonuglon.Tweaks;
 /// </summary>
 public unsafe class EntrustChocoboDuplicates : TweakBase
 {
-    public override string Name => "Saddlebag Entrust Duplicates (AetherBags)";
+    public override string Name => "Saddlebag Duplicates";
     public override string Description => "Adds a button to the bottom of the AetherBags saddlebag window to entrust duplicates. Requires the AetherBags plugin to be installed and loaded.";
 
     private const string AetherBagsPluginInternalName = "AetherBags";
@@ -53,6 +53,17 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         if (taskManager.NumQueuedTasks > 0)
             taskManager.Abort();
     }
+
+    public override void DrawOptions()
+    {
+        if (IsAetherBagsAvailable) return;
+
+        ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+        ImGui.TextColored(UiColors.Warning, "AetherBags not detected - this tweak has no effect until it's installed and loaded.");
+        ImGui.PopTextWrapPos();
+    }
+
+    public override bool HasWarning => Enabled && !IsAetherBagsAvailable;
 
     private void Draw()
     {

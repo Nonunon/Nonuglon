@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
@@ -80,5 +81,33 @@ public unsafe class AutoPillion : TweakBase
         Svc.Log.Debug($"[AutoPillion] Mounting up with {target.Name.TextValue}");
         target.BattleChara()->RidePillion(10);
         attemptExpiresAt = Environment.TickCount64 + Plugin.Configuration.AutoPillionRetryTimeoutMs;
+    }
+
+    public override void DrawOptions()
+    {
+        var config = Plugin.Configuration;
+
+        var restrictToPerson = config.AutoPillionRestrictToPerson;
+        if (ImGui.Checkbox("Restrict to one person##AutoPillion", ref restrictToPerson))
+        {
+            config.AutoPillionRestrictToPerson = restrictToPerson;
+            config.Save();
+        }
+
+        var targetName = config.AutoPillionTargetName;
+        if (ImGui.InputText("Target name##AutoPillion", ref targetName, 64))
+        {
+            config.AutoPillionTargetName = targetName;
+            config.Save();
+        }
+
+        var retryTimeout = config.AutoPillionRetryTimeoutMs;
+        if (ImGui.SliderInt("Retry timeout (ms)##AutoPillion", ref retryTimeout, 500, 10000))
+        {
+            config.AutoPillionRetryTimeoutMs = retryTimeout;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
     }
 }

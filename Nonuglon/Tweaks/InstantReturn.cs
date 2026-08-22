@@ -1,3 +1,4 @@
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Hooking;
@@ -57,6 +58,16 @@ public unsafe class InstantReturn : TweakBase
     {
         base.Dispose();
         returnHook?.Dispose();
+    }
+
+    public override void DrawOptions()
+    {
+        var leaveParty = Plugin.Configuration.InstantReturnLeaveParty;
+        if (ImGui.Checkbox("Leave party first##InstantReturn", ref leaveParty))
+        {
+            Plugin.Configuration.InstantReturnLeaveParty = leaveParty;
+            Plugin.Configuration.Save();
+        }
     }
 
     private void ReturnDetour(AgentReturn* agent)

@@ -2,25 +2,27 @@
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
+using Nonuglon.Support;
 using Nonuglon.Tweaks;
 
 namespace Nonuglon.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
-    private static readonly Vector4 EnabledColor = new(0.4f, 0.9f, 0.4f, 1f);
-    private static readonly Vector4 DisabledColor = new(0.6f, 0.6f, 0.6f, 1f);
-    private static readonly Vector4 HeaderColor = new(0.85f, 0.7f, 0.3f, 1f);
-    private static readonly Vector4 WarningColor = new(0.95f, 0.65f, 0.25f, 1f);
+    private const float SplitterThickness = 6f;
+    private const float MinSidebarWidth = 90f;
+    private const float MaxSidebarWidth = 260f;
 
     private readonly Configuration configuration;
     private readonly Plugin plugin;
+    private int selectedIndex;
+    private float sidebarWidth = 150f;
 
     public ConfigWindow(Plugin plugin) : base("Nonuglon Tweaks###NonuglonConfig")
     {
         Flags = ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse;
 
-        Size = new Vector2(400, 380);
+        Size = new Vector2(480, 360);
         SizeCondition = ImGuiCond.FirstUseEver;
 
         this.plugin = plugin;
@@ -31,102 +33,129 @@ public class ConfigWindow : Window, IDisposable
 
     public override void Draw()
     {
-        DrawTweakSection<InstantReturn>(
-            "Quick Return",
-            "Calls the Return function directly and unconditionally - a hack that skips the confirmation dialog and fires regardless of whether Return is actually valid right now.",
-            enabled => configuration.InstantReturnEnabled = enabled,
-            () =>
-            {
-                var leaveParty = configuration.InstantReturnLeaveParty;
-                if (ImGui.Checkbox("Leave party first##InstantReturn", ref leaveParty))
-                {
-                    configuration.InstantReturnLeaveParty = leaveParty;
-                    configuration.Save();
-                }
-            });
-
-        DrawTweakSection<AutoPillion>(
-            "Auto Pillion",
-            "Automatically hops onto a nearby mount with an open pillion seat.",
-            enabled => configuration.AutoPillionEnabled = enabled,
-            () =>
-            {
-                var restrictToPerson = configuration.AutoPillionRestrictToPerson;
-                if (ImGui.Checkbox("Restrict to one person##AutoPillion", ref restrictToPerson))
-                {
-                    configuration.AutoPillionRestrictToPerson = restrictToPerson;
-                    configuration.Save();
-                }
-
-                var targetName = configuration.AutoPillionTargetName;
-                if (ImGui.InputText("Target name##AutoPillion", ref targetName, 64))
-                {
-                    configuration.AutoPillionTargetName = targetName;
-                    configuration.Save();
-                }
-
-                var retryTimeout = configuration.AutoPillionRetryTimeoutMs;
-                if (ImGui.SliderInt("Retry timeout (ms)##AutoPillion", ref retryTimeout, 500, 10000))
-                {
-                    configuration.AutoPillionRetryTimeoutMs = retryTimeout;
-                    configuration.Save();
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
-            });
-
-        DrawTweakSection<EntrustChocoboDuplicates>(
-            "Saddlebag Entrust Duplicates",
-            "Adds a button to the AetherBags saddlebag window to entrust duplicates. Requires AetherBags to be installed.",
-            enabled => configuration.EntrustChocoboDuplicatesEnabled = enabled,
-            () =>
-            {
-                if (!EntrustChocoboDuplicates.IsAetherBagsAvailable)
-                {
-                    ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
-                    ImGui.TextColored(WarningColor, "\u26a0 AetherBags not detected - this tweak has no effect until it's installed and loaded.");
-                    ImGui.PopTextWrapPos();
-                }
-            });
-    }
-
-    private void DrawTweakSection<T>(string label, string description, Action<bool> onToggled, Action? extraOptions) where T : TweakBase
-    {
-        ImGui.TextColored(HeaderColor, label);
-        ImGui.Separator();
-
-        var tweak = plugin.Tweaks.Find(t => t is T);
-        if (tweak is null)
+        if (plugin.Tweaks.Count == 0)
         {
-            ImGui.TextDisabled("Not loaded.");
-            ImGui.Spacing();
+            ImGui.TextDisabled("No tweaks loaded.");
             return;
         }
 
+        selectedIndex = Math.Clamp(selectedIndex, 0, plugin.Tweaks.Count - 1);
+
+        // All three panes drawn on the same row (SameLine(0, 0) - no default
+        // spacing) at the same explicit height, so the sidebar/splitter/details
+        // line up evenly regardless of how much content the selected tweak draws.
+        var paneHeight = ImGui.GetContentRegionAvail().Y;
+
+        DrawSidebar(paneHeight);
+        ImGui.SameLine(0, 0);
+        DrawSplitter(paneHeight);
+        ImGui.SameLine(0, 0);
+        DrawSelectedTweak(plugin.Tweaks[selectedIndex], paneHeight);
+    }
+
+    /// <summary>Left pane: one selectable row per loaded tweak, driven entirely off
+    /// plugin.Tweaks - adding a tweak elsewhere in the plugin makes it show up here
+    /// automatically, no changes needed in this file.</summary>
+    private void DrawSidebar(float height)
+    {
+        ImGui.BeginChild("##NonuglonSidebar", new Vector2(sidebarWidth, height), true);
+
+        for (var i = 0; i < plugin.Tweaks.Count; i++)
+        {
+            var tweak = plugin.Tweaks[i];
+            var (dotGlyph, dotColor) = StatusDot(tweak);
+
+            ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
+            if (ImGui.Selectable($"{dotGlyph} {tweak.Name}##sidebar{i}", i == selectedIndex))
+                selectedIndex = i;
+            ImGui.PopStyleColor();
+        }
+
+        ImGui.EndChild();
+    }
+
+    /// <summary>Thin invisible-button divider between the sidebar and detail pane.
+    /// Dragging it adjusts sidebarWidth directly via the mouse's per-frame delta,
+    /// clamped to a sane range so it can't be dragged down to nothing or out past
+    /// the window. Cursor swaps to a resize arrow on hover so it reads as
+    /// draggable before the user commits to clicking it.</summary>
+    private void DrawSplitter(float height)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0f, 0f, 0f, 0f));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(1f, 1f, 1f, 0.15f));
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(1f, 1f, 1f, 0.25f));
+
+        ImGui.Button("##NonuglonSplitter", new Vector2(SplitterThickness, height));
+
+        ImGui.PopStyleColor(3);
+
+        if (ImGui.IsItemActive())
+            sidebarWidth = Math.Clamp(sidebarWidth + ImGui.GetIO().MouseDelta.X, MinSidebarWidth, MaxSidebarWidth);
+
+        if (ImGui.IsItemHovered() || ImGui.IsItemActive())
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEw);
+    }
+
+    /// <summary>Right pane: header, description, the enable checkbox (persisted via
+    /// GetToggleAction below), then whatever the tweak itself wants to draw via
+    /// DrawOptions().</summary>
+    private void DrawSelectedTweak(TweakBase tweak, float height)
+    {
+        ImGui.BeginChild("##NonuglonTweakDetails", new Vector2(0, height), true);
+
+        ImGui.TextColored(UiColors.Header, tweak.Name);
+        ImGui.Separator();
+        ImGui.Spacing();
+
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
-        ImGui.TextDisabled(description);
+        ImGui.TextDisabled(tweak.Description);
         ImGui.PopTextWrapPos();
+        ImGui.Spacing();
 
         var enabled = tweak.Enabled;
-        if (ImGui.Checkbox($"Enabled##{typeof(T).Name}", ref enabled))
+        if (ImGui.Checkbox($"Enabled##{tweak.GetType().Name}", ref enabled))
         {
             if (enabled) tweak.EnableTweak();
             else tweak.DisableTweak();
 
-            onToggled(enabled);
+            GetToggleAction(tweak)(enabled);
             configuration.Save();
         }
 
         ImGui.SameLine();
-        ImGui.TextColored(tweak.Enabled ? EnabledColor : DisabledColor, tweak.Enabled ? "\u25cf On" : "\u25cb Off");
-
-        if (extraOptions != null)
-        {
-            ImGui.Indent();
-            extraOptions();
-            ImGui.Unindent();
-        }
+        var (_, statusColor) = StatusDot(tweak);
+        ImGui.TextColored(statusColor, tweak.Enabled ? (tweak.HasWarning ? "\u25cf On (see below)" : "\u25cf On") : "\u25cb Off");
 
         ImGui.Spacing();
+        ImGui.Indent();
+        tweak.DrawOptions();
+        ImGui.Unindent();
+
+        ImGui.EndChild();
     }
+
+    /// <summary>Shared status-dot glyph + color for a tweak, used by both the
+    /// sidebar row and the detail pane's On/Off label so the two never disagree.
+    /// Always the same filled/hollow circle glyphs (FFXIV's font doesn't carry the
+    /// Unicode warning-triangle glyph, so it silently fails to render) - the
+    /// warning state is conveyed by color alone: gray/hollow when off, amber-filled
+    /// when on but HasWarning is true (e.g. a required companion plugin is
+    /// missing), green-filled when on and functioning normally.</summary>
+    private static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
+    {
+        if (!tweak.Enabled) return ("\u25cb", UiColors.Disabled);
+        return ("\u25cf", tweak.HasWarning ? UiColors.Warning : UiColors.Enabled);
+    }
+
+    /// <summary>Maps a tweak instance to the Configuration bool it persists to.
+    /// Kept as an explicit switch rather than reflection - Configuration is a small,
+    /// flat, strongly-typed POCO, and TweakBase's own design philosophy is "no
+    /// reflection-driven config", so this stays consistent with that.</summary>
+    private Action<bool> GetToggleAction(TweakBase tweak) => tweak switch
+    {
+        InstantReturn => enabled => configuration.InstantReturnEnabled = enabled,
+        AutoPillion => enabled => configuration.AutoPillionEnabled = enabled,
+        EntrustChocoboDuplicates => enabled => configuration.EntrustChocoboDuplicatesEnabled = enabled,
+        _ => _ => { }
+    };
 }

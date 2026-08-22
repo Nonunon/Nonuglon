@@ -55,5 +55,19 @@ public abstract class TweakBase : IDisposable
     protected abstract void Enable();
     protected abstract void Disable();
 
+    /// <summary>Draws this tweak's extra options (if any) in the config window,
+    /// indented under its enable checkbox. Default no-op - tweaks with nothing
+    /// beyond the on/off switch don't need to override this. Colocating each
+    /// tweak's own options UI here (instead of hardcoding it in ConfigWindow) means
+    /// adding a new tweak never requires touching ConfigWindow.cs.</summary>
+    public virtual void DrawOptions() { }
+
+    /// <summary>True when this tweak is enabled but not actually functioning as
+    /// expected right now - e.g. a required companion plugin isn't loaded. Drives a
+    /// distinct warning color on the status dot, separate from plain on/off.
+    /// Default false; only override this if the tweak has some external
+    /// dependency that can silently make "enabled" not mean "working".</summary>
+    public virtual bool HasWarning => false;
+
     public virtual void Dispose() => DisableTweak();
 }
