@@ -11,6 +11,7 @@ public class ConfigWindow : Window, IDisposable
     private static readonly Vector4 EnabledColor = new(0.4f, 0.9f, 0.4f, 1f);
     private static readonly Vector4 DisabledColor = new(0.6f, 0.6f, 0.6f, 1f);
     private static readonly Vector4 HeaderColor = new(0.85f, 0.7f, 0.3f, 1f);
+    private static readonly Vector4 WarningColor = new(0.95f, 0.65f, 0.25f, 1f);
 
     private readonly Configuration configuration;
     private readonly Plugin plugin;
@@ -78,7 +79,15 @@ public class ConfigWindow : Window, IDisposable
             "Saddlebag Entrust Duplicates",
             "Adds a button to the AetherBags saddlebag window to entrust duplicates. Requires AetherBags to be installed.",
             enabled => configuration.EntrustChocoboDuplicatesEnabled = enabled,
-            null);
+            () =>
+            {
+                if (!EntrustChocoboDuplicates.IsAetherBagsAvailable)
+                {
+                    ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+                    ImGui.TextColored(WarningColor, "\u26a0 AetherBags not detected - this tweak has no effect until it's installed and loaded.");
+                    ImGui.PopTextWrapPos();
+                }
+            });
     }
 
     private void DrawTweakSection<T>(string label, string description, Action<bool> onToggled, Action? extraOptions) where T : TweakBase

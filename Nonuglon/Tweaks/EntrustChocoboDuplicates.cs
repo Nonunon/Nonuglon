@@ -39,8 +39,11 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
 
     private readonly TaskManager taskManager = new();
 
-    private static bool IsAetherBagsLoaded =>
-        Svc.PluginInterface.InstalledPlugins.Any(x => x.IsLoaded && x.InternalName == AetherBagsPluginInternalName);
+    private static bool IsAetherBagsLoaded => PluginDetection.IsPluginLoaded(AetherBagsPluginInternalName);
+
+    /// <summary>Public so ConfigWindow can show a hint when AetherBags isn't
+    /// detected, instead of the tweak's button just silently never appearing.</summary>
+    public static bool IsAetherBagsAvailable => IsAetherBagsLoaded;
 
     protected override void Enable() => Svc.PluginInterface.UiBuilder.Draw += Draw;
 
