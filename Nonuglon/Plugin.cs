@@ -20,6 +20,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private const string CommandName = "/Nonuglon";
+    private const string CommandNameAlias = "/nonuglon";
 
     public static Configuration Configuration { get; private set; } = null!;
 
@@ -45,6 +46,14 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens Nonuglon settings. See /Nonuglon help for subcommands."
+        });
+
+        // Lowercase alias so /nonuglon works the same as /Nonuglon. Hidden from the
+        // command help list so it doesn't show up as a duplicate entry there.
+        CommandManager.AddHandler(CommandNameAlias, new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Opens Nonuglon settings. See /Nonuglon help for subcommands.",
+            ShowInHelp = false
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -85,6 +94,7 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
+        CommandManager.RemoveHandler(CommandNameAlias);
 
         ECommonsMain.Dispose();
     }
