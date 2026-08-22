@@ -44,6 +44,15 @@ public sealed class Plugin : IDalamudPlugin
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
+#pragma warning disable CS0618 // AutoPillionTargetName is Obsolete - this is the one sanctioned read/write of it, migrating it into the new list on first load after upgrading.
+        if (!string.IsNullOrEmpty(Configuration.AutoPillionTargetName) && Configuration.AutoPillionFavoriteTargets.Count == 0)
+        {
+            Configuration.AutoPillionFavoriteTargets.Add(Configuration.AutoPillionTargetName);
+            Configuration.AutoPillionTargetName = string.Empty;
+            Configuration.Save();
+        }
+#pragma warning restore CS0618
+
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
 
@@ -120,6 +129,17 @@ public sealed class Plugin : IDalamudPlugin
         else tweak.DisableTweak();
 
         return true;
+    }
+
+    /// <summary>Re-syncs Auto Pillion's context-menu integrations against current
+    /// config after the contextmenu/chat2menu commands change one of the two
+    /// flags - mirrors what AutoPillion.DrawOptions' matching checkboxes do, so a
+    /// chat command takes effect immediately instead of only on next plugin
+    /// reload.</summary>
+    private void SyncAutoPillionIntegrations()
+    {
+        if (Tweaks.Find(t => t is AutoPillion) is AutoPillion autoPillion)
+            autoPillion.SyncIntegrations(tweakEnabled: autoPillion.Enabled);
     }
 
     private void OnCommand(string command, string args)
@@ -211,15 +231,33 @@ public sealed class Plugin : IDalamudPlugin
                 return;
 
             case "target":
-                var name = string.Join(' ', parts.Skip(2));
-                if (name.Equals("clear", StringComparison.OrdinalIgnoreCase) || name.Equals("none", StringComparison.OrdinalIgnoreCase))
-                    name = string.Empty;
+                HandleAutoPillionTargetCommand(parts);
+                return;
 
-                var previousTarget = Configuration.AutoPillionTargetName;
-                Configuration.AutoPillionTargetName = name;
+            case "contextmenu":
+                if (parts.Length < 3 || !ResolveBool(parts[2], Configuration.AutoPillionContextMenuEnabled, out var contextMenuEnabled))
+                {
+                    Print("Usage: /Nonuglon autopillion contextmenu <on|off|toggle>");
+                    return;
+                }
+                var previousContextMenu = Configuration.AutoPillionContextMenuEnabled;
+                Configuration.AutoPillionContextMenuEnabled = contextMenuEnabled;
                 Configuration.Save();
-                ReportStateChange(previousTarget, name,
-                    string.IsNullOrEmpty(name) ? "Auto Pillion: target cleared." : $"Auto Pillion: target set to \"{name}\".");
+                SyncAutoPillionIntegrations();
+                ReportStateChange("Auto Pillion: right-click menu", previousContextMenu, contextMenuEnabled);
+                return;
+
+            case "chat2menu":
+                if (parts.Length < 3 || !ResolveBool(parts[2], Configuration.AutoPillionChat2ContextMenuEnabled, out var chat2MenuEnabled))
+                {
+                    Print("Usage: /Nonuglon autopillion chat2menu <on|off|toggle>");
+                    return;
+                }
+                var previousChat2Menu = Configuration.AutoPillionChat2ContextMenuEnabled;
+                Configuration.AutoPillionChat2ContextMenuEnabled = chat2MenuEnabled;
+                Configuration.Save();
+                SyncAutoPillionIntegrations();
+                ReportStateChange("Auto Pillion: Chat 2 menu", previousChat2Menu, chat2MenuEnabled);
                 return;
 
             case "timeout":
@@ -246,6 +284,73 @@ public sealed class Plugin : IDalamudPlugin
                 Configuration.Save();
                 SetTweakEnabled<AutoPillion>(enabled);
                 ReportStateChange("Auto Pillion", previousEnabled, enabled);
+                return;
+        }
+    }
+
+    /// <summary>Handles "/Nonuglon autopillion target add|remove|list|clear". A
+    /// small dispatcher rather than folding this into HandleAutoPillionCommand's
+    /// switch, since managing a list needs more sub-verbs than the plain on/off
+    /// toggles elsewhere in that switch.</summary>
+    private void HandleAutoPillionTargetCommand(string[] parts)
+    {
+        var favorites = Configuration.AutoPillionFavoriteTargets;
+
+        if (parts.Length < 3)
+        {
+            Print("Usage: /Nonuglon autopillion target <add|remove|list|clear> [name]");
+            return;
+        }
+
+        switch (parts[2].ToLowerInvariant())
+        {
+            case "add":
+                var addName = string.Join(' ', parts.Skip(3));
+                if (string.IsNullOrWhiteSpace(addName))
+                {
+                    Print("Usage: /Nonuglon autopillion target add <name>");
+                    return;
+                }
+                if (favorites.Contains(addName))
+                {
+                    Log.Debug($"Auto Pillion: \"{addName}\" is already a favorite. (already was, no change)");
+                    return;
+                }
+                favorites.Add(addName);
+                Configuration.Save();
+                Print($"Auto Pillion: added \"{addName}\" as a favorite.");
+                return;
+
+            case "remove":
+                var removeName = string.Join(' ', parts.Skip(3));
+                if (favorites.RemoveAll(n => n.Equals(removeName, StringComparison.Ordinal)) > 0)
+                {
+                    Configuration.Save();
+                    Print($"Auto Pillion: removed \"{removeName}\" from favorites.");
+                }
+                else
+                {
+                    Log.Debug($"Auto Pillion: \"{removeName}\" wasn't a favorite. (already was, no change)");
+                }
+                return;
+
+            case "list":
+                Print(favorites.Count == 0 ? "Auto Pillion: no favorites saved." : $"Auto Pillion favorites: {string.Join(", ", favorites)}");
+                return;
+
+            case "clear":
+                if (favorites.Count == 0)
+                {
+                    Log.Debug("Auto Pillion: favorites already empty. (already was, no change)");
+                    return;
+                }
+                favorites.Clear();
+                Configuration.Save();
+                Print("Auto Pillion: favorites cleared.");
+                return;
+
+            default:
+                Print("Usage: /Nonuglon autopillion target <add|remove|list|clear> [name]");
                 return;
         }
     }
@@ -335,7 +440,9 @@ public sealed class Plugin : IDalamudPlugin
         Print("  /Nonuglon instantreturn leaveparty <on|off|toggle>");
         Print("  /Nonuglon autopillion <on|off|toggle>");
         Print("  /Nonuglon autopillion restrict <on|off|toggle>");
-        Print("  /Nonuglon autopillion target <name|clear>");
+        Print("  /Nonuglon autopillion target <add|remove|list|clear> [name]");
+        Print("  /Nonuglon autopillion contextmenu <on|off|toggle>");
+        Print("  /Nonuglon autopillion chat2menu <on|off|toggle>");
         Print("  /Nonuglon autopillion timeout <ms, 500-10000>");
         Print("  /Nonuglon entrustchocobo <on|off|toggle>");
     }
