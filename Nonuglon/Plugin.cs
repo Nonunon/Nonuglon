@@ -33,7 +33,14 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        ECommonsMain.Init(PluginInterface, this, ECommons.Module.All);
+        // Only initializing the modules our tweaks actually touch. ObjectLife (VFX +
+        // GameObject ctor hooks) and SplatoonAPI are unused by anything in this plugin -
+        // dropping them removes that startup/shutdown noise from /xllog and skips
+        // installing hooks we never needed. DalamudReflector and ObjectFunctions are kept
+        // since ECommons.UIHelpers.AddonMasterImplementations (used by
+        // EntrustChocoboDuplicates) may depend on them internally - left in until
+        // confirmed otherwise.
+        ECommonsMain.Init(PluginInterface, this, ECommons.Module.DalamudReflector, ECommons.Module.ObjectFunctions);
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -74,7 +81,9 @@ public sealed class Plugin : IDalamudPlugin
         if (Configuration.AutoPillionEnabled) Tweaks[1].EnableTweak();
         if (Configuration.EntrustChocoboDuplicatesEnabled) Tweaks[2].EnableTweak();
 
-        Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
+        Log.Information($"{PluginInterface.Manifest.Name} v{PluginInterface.Manifest.AssemblyVersion} loaded. " +
+            $"InstantReturn={Configuration.InstantReturnEnabled}, AutoPillion={Configuration.AutoPillionEnabled}, " +
+            $"EntrustChocoboDuplicates={Configuration.EntrustChocoboDuplicatesEnabled}");
     }
 
     public void Dispose()
@@ -163,9 +172,10 @@ public sealed class Plugin : IDalamudPlugin
                 return;
             }
 
+            var previousLeaveParty = Configuration.InstantReturnLeaveParty;
             Configuration.InstantReturnLeaveParty = leaveParty;
             Configuration.Save();
-            Print($"Quick Return: leave party first {(leaveParty ? "enabled" : "disabled")}.");
+            ReportStateChange("Quick Return: leave party first", previousLeaveParty, leaveParty);
             return;
         }
 
@@ -175,10 +185,11 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+        var previousEnabled = Configuration.InstantReturnEnabled;
         Configuration.InstantReturnEnabled = enabled;
         Configuration.Save();
         SetTweakEnabled<InstantReturn>(enabled);
-        Print($"Quick Return {(enabled ? "enabled" : "disabled")}.");
+        ReportStateChange("Quick Return", previousEnabled, enabled);
     }
 
     private void HandleAutoPillionCommand(string[] parts)
@@ -193,9 +204,10 @@ public sealed class Plugin : IDalamudPlugin
                     Print("Usage: /Nonuglon autopillion restrict <on|off|toggle>");
                     return;
                 }
+                var previousRestrict = Configuration.AutoPillionRestrictToPerson;
                 Configuration.AutoPillionRestrictToPerson = restrict;
                 Configuration.Save();
-                Print($"Auto Pillion: restrict to one person {(restrict ? "enabled" : "disabled")}.");
+                ReportStateChange("Auto Pillion: restrict to one person", previousRestrict, restrict);
                 return;
 
             case "target":
@@ -203,9 +215,11 @@ public sealed class Plugin : IDalamudPlugin
                 if (name.Equals("clear", StringComparison.OrdinalIgnoreCase) || name.Equals("none", StringComparison.OrdinalIgnoreCase))
                     name = string.Empty;
 
+                var previousTarget = Configuration.AutoPillionTargetName;
                 Configuration.AutoPillionTargetName = name;
                 Configuration.Save();
-                Print(string.IsNullOrEmpty(name) ? "Auto Pillion: target cleared." : $"Auto Pillion: target set to \"{name}\".");
+                ReportStateChange(previousTarget, name,
+                    string.IsNullOrEmpty(name) ? "Auto Pillion: target cleared." : $"Auto Pillion: target set to \"{name}\".");
                 return;
 
             case "timeout":
@@ -215,9 +229,10 @@ public sealed class Plugin : IDalamudPlugin
                     return;
                 }
                 ms = Math.Clamp(ms, 500, 10000);
+                var previousMs = Configuration.AutoPillionRetryTimeoutMs;
                 Configuration.AutoPillionRetryTimeoutMs = ms;
                 Configuration.Save();
-                Print($"Auto Pillion: retry timeout set to {ms}ms.");
+                ReportStateChange(previousMs, ms, $"Auto Pillion: retry timeout set to {ms}ms.");
                 return;
 
             default:
@@ -226,10 +241,11 @@ public sealed class Plugin : IDalamudPlugin
                     Print("Usage: /Nonuglon autopillion <on|off|toggle>");
                     return;
                 }
+                var previousEnabled = Configuration.AutoPillionEnabled;
                 Configuration.AutoPillionEnabled = enabled;
                 Configuration.Save();
                 SetTweakEnabled<AutoPillion>(enabled);
-                Print($"Auto Pillion {(enabled ? "enabled" : "disabled")}.");
+                ReportStateChange("Auto Pillion", previousEnabled, enabled);
                 return;
         }
     }
@@ -242,10 +258,11 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
+        var previousEnabled = Configuration.EntrustChocoboDuplicatesEnabled;
         Configuration.EntrustChocoboDuplicatesEnabled = enabled;
         Configuration.Save();
         SetTweakEnabled<EntrustChocoboDuplicates>(enabled);
-        Print($"Saddlebag Entrust Duplicates {(enabled ? "enabled" : "disabled")}.");
+        ReportStateChange("Saddlebag Entrust Duplicates", previousEnabled, enabled);
     }
 
     private static bool TryParseBool(string s, out bool value)
@@ -278,7 +295,37 @@ public sealed class Plugin : IDalamudPlugin
         return TryParseBool(s, out value);
     }
 
-    private static void Print(string message) => ChatGui.Print($"[Nonuglon] {message}");
+    /// <summary>Prints to chat AND mirrors the same message to the plugin log at
+    /// Verbose level, so every chat message has a corresponding /xllog entry even
+    /// after it scrolls out of the chat window. Verbose (not Debug) on purpose -
+    /// Debug is reserved for the "no-op, suppressed from chat" messages in
+    /// ReportStateChange, so the two log levels stay distinct: Verbose = full
+    /// cookie trail of everything sent to chat, Debug = the extra stuff that
+    /// didn't make it to chat.</summary>
+    private static void Print(string message)
+    {
+        ChatGui.Print($"[Nonuglon] {message}");
+        Log.Verbose(message);
+    }
+
+    /// <summary>Prints a state-change message to chat only if the value actually
+    /// changed. If the command was a no-op (e.g. "instantreturn on" while it was
+    /// already on), the message is routed to the plugin log instead, so it's still
+    /// visible via /xllog without cluttering chat. Generic so it covers any
+    /// comparable config value (bool toggles, the target name, the timeout ms),
+    /// not just booleans.</summary>
+    private static void ReportStateChange<T>(T previousValue, T newValue, string message)
+    {
+        if (!EqualityComparer<T>.Default.Equals(previousValue, newValue))
+            Print(message);
+        else
+            Log.Debug($"{message} (already was, no change)");
+    }
+
+    /// <summary>Convenience overload for the common "X enabled/disabled." shape used
+    /// by every boolean tweak toggle.</summary>
+    private static void ReportStateChange(string label, bool previousValue, bool newValue) =>
+        ReportStateChange(previousValue, newValue, $"{label} {(newValue ? "enabled" : "disabled")}.");
 
     private static void PrintUsage()
     {
