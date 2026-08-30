@@ -15,13 +15,22 @@ public class Configuration : IPluginConfiguration
 
     public bool AutoPillionEnabled { get; set; } = true;
     /// <summary>When true, Auto Pillion only offers a ride to people in
-    /// AutoPillionFavoriteTargets, instead of anyone nearby in the party.</summary>
+    /// AutoPillionFavorites, instead of anyone nearby in the party.</summary>
     public bool AutoPillionRestrictToPerson { get; set; } = false;
-    /// <summary>Names of players Auto Pillion will offer a ride to when
-    /// AutoPillionRestrictToPerson is enabled. Populated via the Auto Pillion
-    /// options UI, the right-click context menu, or the Chat 2 context menu
-    /// integration.</summary>
+    /// <summary>Superseded by AutoPillionFavorites, which also tracks each
+    /// favorite's home world so two players who happen to share a name on
+    /// different worlds can't be confused for each other. Not auto-migrated - a
+    /// bare name has no world to recover. Plugin.cs logs a one-time reminder on
+    /// load if this is non-empty and AutoPillionFavorites is not, so old entries
+    /// stay visible (in the log) to re-add manually, then this is left alone.</summary>
+    [Obsolete("Superseded by AutoPillionFavorites. Not auto-migrated - do not read/write this elsewhere.")]
     public List<string> AutoPillionFavoriteTargets { get; set; } = new();
+    /// <summary>Players Auto Pillion will offer a ride to when
+    /// AutoPillionRestrictToPerson is enabled, identified by name AND home world.
+    /// Populated via the Auto Pillion options UI (which requires typing a world),
+    /// the right-click context menu, or the Chat 2 context menu integration (both
+    /// of which capture the target's home world automatically).</summary>
+    public List<AutoPillionFavorite> AutoPillionFavorites { get; set; } = new();
     /// <summary>Whether the native right-click "Add to Auto Pillion" context menu
     /// entry (party list, friend list, chat log, etc.) is active. Off by default
     /// and independent of AutoPillionChat2ContextMenuEnabled below - seeing the
@@ -50,4 +59,25 @@ public class Configuration : IPluginConfiguration
     {
         Plugin.PluginInterface.SavePluginConfig(this);
     }
+}
+
+/// <summary>A single Auto Pillion favorite, identified by name and home world.
+/// WorldId is what OnUpdate actually matches against (a plain uint compare against
+/// IPlayerCharacter.HomeWorld.RowId, no Excel sheet lookup needed per candidate
+/// per frame); WorldName is a cached copy of the world's display name from the
+/// moment this favorite was added, used only for showing "Name@World" in the UI
+/// and chat output.</summary>
+[Serializable]
+public class AutoPillionFavorite
+{
+    public string Name { get; set; } = string.Empty;
+    public uint WorldId { get; set; }
+    public string WorldName { get; set; } = string.Empty;
+    /// <summary>When false, OnUpdate skips this favorite entirely (as if it
+    /// weren't in the list) while leaving it saved - a way to temporarily rule
+    /// someone out (or prefer another favorite ahead of them, since OnUpdate tries
+    /// favorites in list order and stops at the first match) without losing the
+    /// saved name+world. Defaults true so existing/newly-added favorites behave
+    /// exactly as before until deliberately turned off.</summary>
+    public bool Enabled { get; set; } = true;
 }

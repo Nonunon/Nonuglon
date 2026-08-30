@@ -7,6 +7,7 @@ using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using ECommons;
+using Nonuglon.Support;
 using Nonuglon.Tweaks;
 using Nonuglon.Windows;
 
@@ -50,6 +51,15 @@ public sealed class Plugin : IDalamudPlugin
             Configuration.AutoPillionFavoriteTargets.Add(Configuration.AutoPillionTargetName);
             Configuration.AutoPillionTargetName = string.Empty;
             Configuration.Save();
+        }
+#pragma warning restore CS0618
+
+#pragma warning disable CS0618 // AutoPillionFavoriteTargets is Obsolete - read-only, one-time informational check. There's no world to migrate a bare name into, so this just surfaces the old list in the log instead of silently losing it.
+        if (Configuration.AutoPillionFavoriteTargets.Count > 0 && Configuration.AutoPillionFavorites.Count == 0)
+        {
+            Log.Information($"Auto Pillion: {Configuration.AutoPillionFavoriteTargets.Count} favorite(s) from before world-aware matching are still on file " +
+                $"({string.Join(", ", Configuration.AutoPillionFavoriteTargets)}) but can't be auto-migrated without knowing their world. " +
+                "Re-add them via the config UI or \"/Nonuglon autopillion target add <name>@<world>\".");
         }
 #pragma warning restore CS0618
 
@@ -291,51 +301,97 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>Handles "/Nonuglon autopillion target add|remove|list|clear". A
     /// small dispatcher rather than folding this into HandleAutoPillionCommand's
     /// switch, since managing a list needs more sub-verbs than the plain on/off
-    /// toggles elsewhere in that switch.</summary>
+    /// toggles elsewhere in that switch. add/remove take "name@world" now that
+    /// favorites are world-aware - see TryParseNameAtWorld below.</summary>
     private void HandleAutoPillionTargetCommand(string[] parts)
     {
-        var favorites = Configuration.AutoPillionFavoriteTargets;
+        var favorites = Configuration.AutoPillionFavorites;
 
         if (parts.Length < 3)
         {
-            Print("Usage: /Nonuglon autopillion target <add|remove|list|clear> [name]");
+            Print("Usage: /Nonuglon autopillion target <add|remove|enable|disable|list|clear> [name@world]");
             return;
         }
 
         switch (parts[2].ToLowerInvariant())
         {
             case "add":
-                var addName = string.Join(' ', parts.Skip(3));
-                if (string.IsNullOrWhiteSpace(addName))
+            {
+                var raw = string.Join(' ', parts.Skip(3));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
                 {
-                    Print("Usage: /Nonuglon autopillion target add <name>");
+                    Print("Usage: /Nonuglon autopillion target add <name>@<world>");
                     return;
                 }
-                if (favorites.Contains(addName))
+                if (!WorldLookup.TryFindWorld(worldInput, out var world))
                 {
-                    Log.Debug($"Auto Pillion: \"{addName}\" is already a favorite. (already was, no change)");
+                    Print($"Auto Pillion: unknown world \"{worldInput}\".");
                     return;
                 }
-                favorites.Add(addName);
+                var worldName = world.Name.ExtractText();
+                if (favorites.Any(f => f.Name == name && f.WorldId == world.RowId))
+                {
+                    Log.Debug($"Auto Pillion: \"{name}@{worldName}\" is already a favorite. (already was, no change)");
+                    return;
+                }
+                favorites.Add(new AutoPillionFavorite { Name = name, WorldId = world.RowId, WorldName = worldName });
                 Configuration.Save();
-                Print($"Auto Pillion: added \"{addName}\" as a favorite.");
+                Print($"Auto Pillion: added \"{name}@{worldName}\" as a favorite.");
                 return;
+            }
 
             case "remove":
-                var removeName = string.Join(' ', parts.Skip(3));
-                if (favorites.RemoveAll(n => n.Equals(removeName, StringComparison.Ordinal)) > 0)
+            {
+                var raw = string.Join(' ', parts.Skip(3));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
+                {
+                    Print("Usage: /Nonuglon autopillion target remove <name>@<world>");
+                    return;
+                }
+                var removed = favorites.RemoveAll(f =>
+                    f.Name.Equals(name, StringComparison.Ordinal) &&
+                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                if (removed > 0)
                 {
                     Configuration.Save();
-                    Print($"Auto Pillion: removed \"{removeName}\" from favorites.");
+                    Print($"Auto Pillion: removed \"{name}@{worldInput}\" from favorites.");
                 }
                 else
                 {
-                    Log.Debug($"Auto Pillion: \"{removeName}\" wasn't a favorite. (already was, no change)");
+                    Log.Debug($"Auto Pillion: \"{name}@{worldInput}\" wasn't a favorite. (already was, no change)");
                 }
                 return;
+            }
+
+            case "enable":
+            case "disable":
+            {
+                var wantEnabled = parts[2].Equals("enable", StringComparison.OrdinalIgnoreCase);
+                var raw = string.Join(' ', parts.Skip(3));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
+                {
+                    Print($"Usage: /Nonuglon autopillion target {parts[2].ToLowerInvariant()} <name>@<world>");
+                    return;
+                }
+                var favorite = favorites.FirstOrDefault(f =>
+                    f.Name.Equals(name, StringComparison.Ordinal) &&
+                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                if (favorite is null)
+                {
+                    Print($"Auto Pillion: \"{name}@{worldInput}\" isn't a saved favorite.");
+                    return;
+                }
+                var previousEnabled = favorite.Enabled;
+                favorite.Enabled = wantEnabled;
+                Configuration.Save();
+                ReportStateChange($"Auto Pillion favorite \"{favorite.Name}@{favorite.WorldName}\"", previousEnabled, wantEnabled);
+                return;
+            }
 
             case "list":
-                Print(favorites.Count == 0 ? "Auto Pillion: no favorites saved." : $"Auto Pillion favorites: {string.Join(", ", favorites)}");
+                Print(favorites.Count == 0
+                    ? "Auto Pillion: no favorites saved."
+                    : $"Auto Pillion favorites: {string.Join(", ", favorites.Select(f => f.Enabled ? $"{f.Name}@{f.WorldName}" : $"{f.Name}@{f.WorldName} (disabled)"))}");
                 return;
 
             case "clear":
@@ -350,9 +406,27 @@ public sealed class Plugin : IDalamudPlugin
                 return;
 
             default:
-                Print("Usage: /Nonuglon autopillion target <add|remove|list|clear> [name]");
+                Print("Usage: /Nonuglon autopillion target <add|remove|enable|disable|list|clear> [name@world]");
                 return;
         }
+    }
+
+    /// <summary>Splits "Firstname Lastname@World" on the LAST '@' - character
+    /// names never contain '@' and world names never contain spaces, so this is
+    /// unambiguous even though the name half can have a space in it.</summary>
+    private static bool TryParseNameAtWorld(string raw, out string name, out string world)
+    {
+        var at = raw.LastIndexOf('@');
+        if (at <= 0 || at == raw.Length - 1)
+        {
+            name = string.Empty;
+            world = string.Empty;
+            return false;
+        }
+
+        name = raw[..at].Trim();
+        world = raw[(at + 1)..].Trim();
+        return !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(world);
     }
 
     private void HandleEntrustCommand(string[] parts)
@@ -440,7 +514,7 @@ public sealed class Plugin : IDalamudPlugin
         Print("  /Nonuglon instantreturn leaveparty <on|off|toggle>");
         Print("  /Nonuglon autopillion <on|off|toggle>");
         Print("  /Nonuglon autopillion restrict <on|off|toggle>");
-        Print("  /Nonuglon autopillion target <add|remove|list|clear> [name]");
+        Print("  /Nonuglon autopillion target <add|remove|enable|disable|list|clear> [name@world]");
         Print("  /Nonuglon autopillion contextmenu <on|off|toggle>");
         Print("  /Nonuglon autopillion chat2menu <on|off|toggle>");
         Print("  /Nonuglon autopillion timeout <ms, 500-10000>");

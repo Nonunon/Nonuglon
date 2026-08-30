@@ -35,10 +35,15 @@ public unsafe class AutoPillion : TweakBase
     private AutoPillionContextMenu? contextMenu;
     private AutoPillionChat2Ipc? chat2Ipc;
 
-    /// <summary>Backing field for the "add a favorite" text input in DrawOptions -
-    /// lives on the tweak instance (not static/local) since ImGui needs somewhere
-    /// stable to write into across frames.</summary>
-    private string newFavoriteInput = string.Empty;
+    /// <summary>Backing fields for the "add a favorite" name/world text inputs in
+    /// DrawOptions - live on the tweak instance (not static/local) since ImGui
+    /// needs somewhere stable to write into across frames.</summary>
+    private string newFavoriteNameInput = string.Empty;
+    private string newFavoriteWorldInput = string.Empty;
+    /// <summary>Set by TryAddFavorite when the last Add click failed validation
+    /// (empty field, unknown world, or a duplicate) - drawn as an inline warning
+    /// under the input row until the next successful add or edit.</summary>
+    private string? newFavoriteError;
 
     protected override void Enable()
     {
@@ -93,9 +98,11 @@ public unsafe class AutoPillion : TweakBase
 
         if (config.AutoPillionRestrictToPerson)
         {
-            foreach (var favoriteName in config.AutoPillionFavoriteTargets)
+            foreach (var favorite in config.AutoPillionFavorites)
             {
-                var target = GameObjectPillionExtensions.FindPlayerByName(favoriteName);
+                if (!favorite.Enabled) continue;
+
+                var target = GameObjectPillionExtensions.FindPlayerByNameAndWorld(favorite.Name, favorite.WorldId);
                 if (target is null || target.EntityId == player.EntityId) continue;
                 if (target.CurrentDistance >= 3) continue;
                 if (!target.CanRidePillion()) continue;
@@ -185,32 +192,65 @@ public unsafe class AutoPillion : TweakBase
         ImGui.Spacing();
         ImGui.TextDisabled("Favorites:");
 
-        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 60f);
-        ImGui.InputTextWithHint("##AutoPillionNewFavorite", "Character name", ref newFavoriteInput, 64);
+        const float addButtonWidth = 50f;
+        var fieldWidth = (ImGui.GetContentRegionAvail().X - addButtonWidth - (ImGui.GetStyle().ItemSpacing.X * 2)) / 2f;
+
+        ImGui.SetNextItemWidth(fieldWidth);
+        ImGui.InputTextWithHint("##AutoPillionNewFavoriteName", "Character name", ref newFavoriteNameInput, 64);
         ImGui.SameLine();
-        if (ImGui.Button("Add##AutoPillionFavorite") && !string.IsNullOrWhiteSpace(newFavoriteInput))
+        ImGui.SetNextItemWidth(fieldWidth);
+        ImGui.InputTextWithHint("##AutoPillionNewFavoriteWorld", "World", ref newFavoriteWorldInput, 32);
+        ImGui.SameLine();
+        if (ImGui.Button("Add##AutoPillionFavorite"))
+            TryAddFavorite(config);
+
+        if (newFavoriteError is { } error)
         {
-            if (!config.AutoPillionFavoriteTargets.Contains(newFavoriteInput))
-                config.AutoPillionFavoriteTargets.Add(newFavoriteInput);
-            config.Save();
-            newFavoriteInput = string.Empty;
+            ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+            ImGui.TextColored(UiColors.Warning, error);
+            ImGui.PopTextWrapPos();
         }
 
-        if (config.AutoPillionFavoriteTargets.Count == 0)
+        if (config.AutoPillionFavorites.Count == 0)
         {
             ImGui.TextDisabled("(none saved yet - add one above)");
         }
         else
         {
-            for (var i = config.AutoPillionFavoriteTargets.Count - 1; i >= 0; i--)
+            // Shown in list order, same as OnUpdate tries them (top = tried
+            // first) - reordering priority means removing and re-adding in the
+            // order you want. Removal is deferred to after the loop instead of
+            // RemoveAt-ing mid-iteration, so indices don't shift out from under
+            // the rows still to be drawn.
+            var removeIndex = -1;
+            for (var i = 0; i < config.AutoPillionFavorites.Count; i++)
             {
-                ImGui.Text(config.AutoPillionFavoriteTargets[i]);
-                ImGui.SameLine();
-                if (ImGui.Button($"x##AutoPillionFavorite{i}"))
+                var favorite = config.AutoPillionFavorites[i];
+
+                var favoriteEnabled = favorite.Enabled;
+                if (ImGui.Checkbox($"##AutoPillionFavoriteEnabled{i}", ref favoriteEnabled))
                 {
-                    config.AutoPillionFavoriteTargets.RemoveAt(i);
+                    favorite.Enabled = favoriteEnabled;
                     config.Save();
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Unchecked: kept in the list, but skipped by matching - lets you rule someone out (or prefer another favorite ahead of them) without deleting them.");
+                ImGui.SameLine();
+
+                if (favorite.Enabled)
+                    ImGui.Text($"{favorite.Name}@{favorite.WorldName}");
+                else
+                    ImGui.TextDisabled($"{favorite.Name}@{favorite.WorldName}");
+
+                ImGui.SameLine();
+                if (ImGui.Button($"x##AutoPillionFavorite{i}"))
+                    removeIndex = i;
+            }
+
+            if (removeIndex >= 0)
+            {
+                config.AutoPillionFavorites.RemoveAt(removeIndex);
+                config.Save();
             }
         }
 
@@ -223,5 +263,42 @@ public unsafe class AutoPillion : TweakBase
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
+    }
+
+    /// <summary>Validates and adds a favorite from the two input fields above -
+    /// both must be non-empty, the world must resolve against the real World Excel
+    /// sheet (via WorldLookup, so a typo doesn't silently save a favorite that can
+    /// never match anyone), and the resulting name+world pair must not already be
+    /// saved. Sets newFavoriteError on failure instead of throwing/logging, since
+    /// this is a plain user-input mistake, not an exceptional condition.</summary>
+    private void TryAddFavorite(Configuration config)
+    {
+        var name = newFavoriteNameInput.Trim();
+        var worldInput = newFavoriteWorldInput.Trim();
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(worldInput))
+        {
+            newFavoriteError = "Enter both a character name and a world.";
+            return;
+        }
+
+        if (!WorldLookup.TryFindWorld(worldInput, out var world))
+        {
+            newFavoriteError = $"Unknown world \"{worldInput}\".";
+            return;
+        }
+
+        if (config.AutoPillionFavorites.Any(f => f.Name == name && f.WorldId == world.RowId))
+        {
+            newFavoriteError = $"\"{name}@{world.Name.ExtractText()}\" is already a favorite.";
+            return;
+        }
+
+        config.AutoPillionFavorites.Add(new AutoPillionFavorite { Name = name, WorldId = world.RowId, WorldName = world.Name.ExtractText() });
+        config.Save();
+
+        newFavoriteNameInput = string.Empty;
+        newFavoriteWorldInput = string.Empty;
+        newFavoriteError = null;
     }
 }

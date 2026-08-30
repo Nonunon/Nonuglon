@@ -1,4 +1,5 @@
 using System.Linq;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -31,10 +32,16 @@ public static unsafe class GameObjectPillionExtensions
         return mount.MountedEntityIds[1..].ToArray().Count(x => x != 0) < extraSeats;
     }
 
-    /// <summary>Every player-visible object matching a name, used as a lightweight
-    /// stand-in for clib's IObjectTable.PlayerObjects.</summary>
-    public static IGameObject? FindPlayerByName(string name) =>
+    /// <summary>Every player-visible object matching both name AND home world, used
+    /// as a lightweight stand-in for clib's IObjectTable.PlayerObjects. Checking
+    /// world alongside name (the original ffxiv-bundleoftweaks tweak only checked
+    /// name) avoids offering a ride to the wrong person when two players share a
+    /// name on different worlds - not rare in cross-world duty/party finder
+    /// content.</summary>
+    public static IGameObject? FindPlayerByNameAndWorld(string name, uint worldId) =>
         Svc.Objects.FirstOrDefault(o =>
             o.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc &&
-            o.Name.TextValue == name);
+            o is IPlayerCharacter pc &&
+            pc.HomeWorld.RowId == worldId &&
+            pc.Name.TextValue == name);
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -43,10 +44,16 @@ public class AutoPillionChat2Ipc : IDisposable
 
         if (ImGui.Selectable("Add to Auto Pillion"))
         {
-            var favorites = Plugin.Configuration.AutoPillionFavoriteTargets;
-            if (!favorites.Contains(sender.PlayerName))
+            var favorites = Plugin.Configuration.AutoPillionFavorites;
+            var worldId = sender.World.RowId;
+            if (worldId != 0 && !favorites.Any(f => f.Name == sender.PlayerName && f.WorldId == worldId))
             {
-                favorites.Add(sender.PlayerName);
+                favorites.Add(new AutoPillionFavorite
+                {
+                    Name = sender.PlayerName,
+                    WorldId = worldId,
+                    WorldName = sender.World.ValueNullable?.Name.ExtractText() ?? string.Empty
+                });
                 Plugin.Configuration.Save();
             }
         }

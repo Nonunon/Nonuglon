@@ -56,10 +56,20 @@ public class AutoPillionContextMenu : IDisposable
     {
         if (args.Target is not MenuTargetDefault target || string.IsNullOrEmpty(target.TargetName)) return;
 
-        var favorites = Plugin.Configuration.AutoPillionFavoriteTargets;
-        if (favorites.Contains(target.TargetName)) return;
+        // 0 means the target isn't a real player-on-a-world (e.g. an NPC that
+        // still passed the ValidAddons/name checks above) - nothing sane to save.
+        var worldId = target.TargetHomeWorld.RowId;
+        if (worldId == 0) return;
 
-        favorites.Add(target.TargetName);
+        var favorites = Plugin.Configuration.AutoPillionFavorites;
+        if (favorites.Any(f => f.Name == target.TargetName && f.WorldId == worldId)) return;
+
+        favorites.Add(new AutoPillionFavorite
+        {
+            Name = target.TargetName,
+            WorldId = worldId,
+            WorldName = target.TargetHomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty
+        });
         Plugin.Configuration.Save();
     }
 
