@@ -179,6 +179,10 @@ public sealed class Plugin : IDalamudPlugin
             case "chocobo":
                 HandleEntrustCommand(parts);
                 break;
+            case "searchinfo":
+            case "searchinfomenu":
+                HandleSearchInfoCommand(parts);
+                break;
             case "config":
             case "settings":
                 ToggleConfigUi();
@@ -447,6 +451,21 @@ public sealed class Plugin : IDalamudPlugin
         ReportStateChange("Saddlebag Entrust Duplicates", previousEnabled, enabled);
     }
 
+    private void HandleSearchInfoCommand(string[] parts)
+    {
+        if (parts.Length < 2 || !ResolveBool(parts[1], Configuration.SearchInfoMenuEnabled, out var enabled))
+        {
+            Print("Usage: /Nonuglon searchinfo <on|off|toggle>");
+            return;
+        }
+
+        var previousEnabled = Configuration.SearchInfoMenuEnabled;
+        Configuration.SearchInfoMenuEnabled = enabled;
+        Configuration.Save();
+        SetTweakEnabled<SearchInfoMenu>(enabled);
+        ReportStateChange("Search Info Menu", previousEnabled, enabled);
+    }
+
     private static bool TryParseBool(string s, out bool value)
     {
         switch (s.ToLowerInvariant())
@@ -522,6 +541,7 @@ public sealed class Plugin : IDalamudPlugin
         Print("  /Nonuglon autopillion chat2menu <on|off|toggle>");
         Print("  /Nonuglon autopillion timeout <ms, 500-10000>");
         Print("  /Nonuglon entrustchocobo <on|off|toggle>");
+        Print("  /Nonuglon searchinfo <on|off|toggle>");
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();

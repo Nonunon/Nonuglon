@@ -41,6 +41,8 @@ All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or
 /Nonuglon autopillion target clear
 
 /Nonuglon entrustchocobo <on|off|toggle>           aliases: entrust, chocobo
+
+/Nonuglon searchinfo <on|off|toggle>
 ```
 
 </details>
