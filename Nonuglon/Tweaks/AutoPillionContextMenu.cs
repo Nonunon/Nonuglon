@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Dalamud.Game.Gui.ContextMenu;
 using ECommons.DalamudServices;
+using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
@@ -38,7 +39,9 @@ public class AutoPillionContextMenu : IDisposable
         menuItem = new MenuItem
         {
             Name = "Add to Auto Pillion",
-            OnClicked = OnClicked
+            OnClicked = OnClicked,
+            PrefixChar = ContextMenuBranding.PrefixChar,
+            PrefixColor = ContextMenuBranding.PrefixColor,
         };
 
         Svc.ContextMenu.OnMenuOpened += OnMenuOpened;

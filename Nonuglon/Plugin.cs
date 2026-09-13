@@ -95,14 +95,17 @@ public sealed class Plugin : IDalamudPlugin
         Tweaks.Add(new InstantReturn());
         Tweaks.Add(new AutoPillion());
         Tweaks.Add(new EntrustChocoboDuplicates());
+        Tweaks.Add(new SearchInfoMenu());
 
         if (Configuration.InstantReturnEnabled) Tweaks[0].EnableTweak();
         if (Configuration.AutoPillionEnabled) Tweaks[1].EnableTweak();
         if (Configuration.EntrustChocoboDuplicatesEnabled) Tweaks[2].EnableTweak();
+        if (Configuration.SearchInfoMenuEnabled) Tweaks[3].EnableTweak();
 
         Log.Information($"{PluginInterface.Manifest.Name} v{PluginInterface.Manifest.AssemblyVersion} loaded. " +
             $"InstantReturn={Configuration.InstantReturnEnabled}, AutoPillion={Configuration.AutoPillionEnabled}, " +
-            $"EntrustChocoboDuplicates={Configuration.EntrustChocoboDuplicatesEnabled}");
+            $"EntrustChocoboDuplicates={Configuration.EntrustChocoboDuplicatesEnabled}, " +
+            $"SearchInfoMenu={Configuration.SearchInfoMenuEnabled}");
     }
 
     public void Dispose()

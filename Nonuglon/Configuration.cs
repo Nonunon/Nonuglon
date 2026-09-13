@@ -54,6 +54,8 @@ public class Configuration : IPluginConfiguration
 
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = true;
 
+    public bool SearchInfoMenuEnabled { get; set; } = false;
+
     // The below exists just to make saving less cumbersome
     public void Save()
     {

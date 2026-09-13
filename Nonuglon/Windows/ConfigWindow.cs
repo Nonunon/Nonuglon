@@ -156,6 +156,7 @@ public class ConfigWindow : Window, IDisposable
         InstantReturn => enabled => configuration.InstantReturnEnabled = enabled,
         AutoPillion => enabled => configuration.AutoPillionEnabled = enabled,
         EntrustChocoboDuplicates => enabled => configuration.EntrustChocoboDuplicatesEnabled = enabled,
+        SearchInfoMenu => enabled => configuration.SearchInfoMenuEnabled = enabled,
         _ => _ => { }
     };
 }
