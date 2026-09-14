@@ -1,3 +1,4 @@
+using System;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -9,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Nonuglon.Support;
+using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
@@ -31,6 +33,20 @@ public unsafe class InstantReturn : TweakBase
 {
     public override string Name => "Quick Return";
     public override string Description => "Calls the Return function directly and unconditionally - a hack that skips the confirmation dialog and fires regardless of whether Return is actually valid right now. Optionally leaves/disbands your party first.";
+
+    public override bool ConfigEnabled
+    {
+        get => Plugin.Configuration.InstantReturnEnabled;
+        set => Plugin.Configuration.InstantReturnEnabled = value;
+    }
+
+    public override string[] CommandNames => ["instantreturn", "quickreturn"];
+
+    public override string[] UsageLines =>
+    [
+        ..base.UsageLines,
+        $"/Nonuglon {CommandNames[0]} leaveparty <on|off|toggle>",
+    ];
 
     private const int ReturnGeneralActionId = 8;
 
@@ -68,6 +84,26 @@ public unsafe class InstantReturn : TweakBase
             Plugin.Configuration.InstantReturnLeaveParty = leaveParty;
             Plugin.Configuration.Save();
         }
+    }
+
+    public override void HandleCommand(string[] args)
+    {
+        if (args.Length >= 1 && args[0].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.InstantReturnLeaveParty, out var leaveParty))
+            {
+                Print($"Usage: /Nonuglon {CommandNames[0]} leaveparty <on|off|toggle>");
+                return;
+            }
+
+            var previous = Plugin.Configuration.InstantReturnLeaveParty;
+            Plugin.Configuration.InstantReturnLeaveParty = leaveParty;
+            Plugin.Configuration.Save();
+            ReportStateChange("Quick Return: leave party first", previous, leaveParty);
+            return;
+        }
+
+        base.HandleCommand(args);
     }
 
     private void ReturnDetour(AgentReturn* agent)

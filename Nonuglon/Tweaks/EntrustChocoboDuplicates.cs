@@ -26,6 +26,14 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
     public override string Name => "Saddlebag Duplicates";
     public override string Description => "Adds a button to the bottom of the AetherBags saddlebag window to entrust duplicates. Requires the AetherBags plugin to be installed and loaded.";
 
+    public override bool ConfigEnabled
+    {
+        get => Plugin.Configuration.EntrustChocoboDuplicatesEnabled;
+        set => Plugin.Configuration.EntrustChocoboDuplicatesEnabled = value;
+    }
+
+    public override string[] CommandNames => ["entrustchocobo", "entrust", "chocobo"];
+
     private const string AetherBagsPluginInternalName = "AetherBags";
     private const string AetherBagsSaddlebagAddonName = "AetherBags_SaddleBag";
     private const uint WindowNodeId = 2;

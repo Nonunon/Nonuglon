@@ -6,6 +6,7 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using ECommons.DalamudServices;
 using Nonuglon.Support;
+using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
@@ -27,6 +28,24 @@ public unsafe class AutoPillion : TweakBase
 {
     public override string Name => "Auto Pillion";
     public override string Description => "Automatically hops onto a nearby mount with an open pillion seat. Optionally restrict to a saved list of favorite people.";
+
+    public override bool ConfigEnabled
+    {
+        get => Plugin.Configuration.AutoPillionEnabled;
+        set => Plugin.Configuration.AutoPillionEnabled = value;
+    }
+
+    public override string[] CommandNames => ["autopillion", "pillion"];
+
+    public override string[] UsageLines =>
+    [
+        ..base.UsageLines,
+        $"/Nonuglon {CommandNames[0]} restrict <on|off|toggle>",
+        $"/Nonuglon {CommandNames[0]} target <add|remove|enable|disable|list|clear> [name@world]",
+        $"/Nonuglon {CommandNames[0]} contextmenu <on|off|toggle>",
+        $"/Nonuglon {CommandNames[0]} chat2menu <on|off|toggle>",
+        $"/Nonuglon {CommandNames[0]} timeout <ms, 500-10000>",
+    ];
 
     /// <summary>0 = idle/not attempting. Otherwise, the Environment.TickCount64 at
     /// which the current attempt should be considered timed out.</summary>
@@ -300,5 +319,211 @@ public unsafe class AutoPillion : TweakBase
         newFavoriteNameInput = string.Empty;
         newFavoriteWorldInput = string.Empty;
         newFavoriteError = null;
+    }
+
+    public override void HandleCommand(string[] args)
+    {
+        if (args.Length == 0) { base.HandleCommand(args); return; }
+
+        switch (args[0].ToLowerInvariant())
+        {
+            case "restrict":
+            {
+                if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.AutoPillionRestrictToPerson, out var restrict))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} restrict <on|off|toggle>");
+                    return;
+                }
+                var previousRestrict = Plugin.Configuration.AutoPillionRestrictToPerson;
+                Plugin.Configuration.AutoPillionRestrictToPerson = restrict;
+                Plugin.Configuration.Save();
+                ReportStateChange("Auto Pillion: restrict to one person", previousRestrict, restrict);
+                return;
+            }
+
+            case "target":
+                HandleTargetCommand(args);
+                return;
+
+            case "contextmenu":
+            {
+                if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.AutoPillionContextMenuEnabled, out var contextMenuEnabled))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} contextmenu <on|off|toggle>");
+                    return;
+                }
+                var previousContextMenu = Plugin.Configuration.AutoPillionContextMenuEnabled;
+                Plugin.Configuration.AutoPillionContextMenuEnabled = contextMenuEnabled;
+                Plugin.Configuration.Save();
+                SyncIntegrations(tweakEnabled: Enabled);
+                ReportStateChange("Auto Pillion: right-click menu", previousContextMenu, contextMenuEnabled);
+                return;
+            }
+
+            case "chat2menu":
+            {
+                if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.AutoPillionChat2ContextMenuEnabled, out var chat2MenuEnabled))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} chat2menu <on|off|toggle>");
+                    return;
+                }
+                var previousChat2Menu = Plugin.Configuration.AutoPillionChat2ContextMenuEnabled;
+                Plugin.Configuration.AutoPillionChat2ContextMenuEnabled = chat2MenuEnabled;
+                Plugin.Configuration.Save();
+                SyncIntegrations(tweakEnabled: Enabled);
+                ReportStateChange("Auto Pillion: Chat 2 menu", previousChat2Menu, chat2MenuEnabled);
+                return;
+            }
+
+            case "timeout":
+            {
+                if (args.Length < 2 || !int.TryParse(args[1], out var ms))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} timeout <ms, 500-10000>");
+                    return;
+                }
+                ms = Math.Clamp(ms, 500, 10000);
+                var previousMs = Plugin.Configuration.AutoPillionRetryTimeoutMs;
+                Plugin.Configuration.AutoPillionRetryTimeoutMs = ms;
+                Plugin.Configuration.Save();
+                ReportStateChange(previousMs, ms, $"Auto Pillion: retry timeout set to {ms}ms.");
+                return;
+            }
+
+            default:
+                base.HandleCommand(args);
+                return;
+        }
+    }
+
+    /// <summary>Handles "/Nonuglon autopillion target add|remove|list|clear". A
+    /// small dispatcher rather than folding this into HandleCommand's switch, since
+    /// managing a list needs more sub-verbs than the plain on/off toggles
+    /// elsewhere in that switch. add/remove take "name@world" now that favorites
+    /// are world-aware - see TryParseNameAtWorld below.</summary>
+    private void HandleTargetCommand(string[] args)
+    {
+        var favorites = Plugin.Configuration.AutoPillionFavorites;
+
+        if (args.Length < 2)
+        {
+            Print($"Usage: /Nonuglon {CommandNames[0]} target <add|remove|enable|disable|list|clear> [name@world]");
+            return;
+        }
+
+        switch (args[1].ToLowerInvariant())
+        {
+            case "add":
+            {
+                var raw = string.Join(' ', args.Skip(2));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} target add <name>@<world>");
+                    return;
+                }
+                if (!WorldLookup.TryFindWorld(worldInput, out var world))
+                {
+                    Print($"Auto Pillion: unknown world \"{worldInput}\".");
+                    return;
+                }
+                var worldName = world.Name.ExtractText();
+                if (favorites.Any(f => f.Name == name && f.WorldId == world.RowId))
+                {
+                    Svc.Log.Debug($"Auto Pillion: \"{name}@{worldName}\" is already a favorite. (already was, no change)");
+                    return;
+                }
+                favorites.Add(new AutoPillionFavorite { Name = name, WorldId = world.RowId, WorldName = worldName });
+                Plugin.Configuration.Save();
+                Print($"Auto Pillion: added \"{name}@{worldName}\" as a favorite.");
+                return;
+            }
+
+            case "remove":
+            {
+                var raw = string.Join(' ', args.Skip(2));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} target remove <name>@<world>");
+                    return;
+                }
+                var removed = favorites.RemoveAll(f =>
+                    f.Name.Equals(name, StringComparison.Ordinal) &&
+                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                if (removed > 0)
+                {
+                    Plugin.Configuration.Save();
+                    Print($"Auto Pillion: removed \"{name}@{worldInput}\" from favorites.");
+                }
+                else
+                {
+                    Svc.Log.Debug($"Auto Pillion: \"{name}@{worldInput}\" wasn't a favorite. (already was, no change)");
+                }
+                return;
+            }
+
+            case "enable":
+            case "disable":
+            {
+                var wantEnabled = args[1].Equals("enable", StringComparison.OrdinalIgnoreCase);
+                var raw = string.Join(' ', args.Skip(2));
+                if (!TryParseNameAtWorld(raw, out var name, out var worldInput))
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} target {args[1].ToLowerInvariant()} <name>@<world>");
+                    return;
+                }
+                var favorite = favorites.FirstOrDefault(f =>
+                    f.Name.Equals(name, StringComparison.Ordinal) &&
+                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                if (favorite is null)
+                {
+                    Print($"Auto Pillion: \"{name}@{worldInput}\" isn't a saved favorite.");
+                    return;
+                }
+                var previousEnabled = favorite.Enabled;
+                favorite.Enabled = wantEnabled;
+                Plugin.Configuration.Save();
+                ReportStateChange($"Auto Pillion favorite \"{favorite.Name}@{favorite.WorldName}\"", previousEnabled, wantEnabled);
+                return;
+            }
+
+            case "list":
+                Print(favorites.Count == 0
+                    ? "Auto Pillion: no favorites saved."
+                    : $"Auto Pillion favorites: {string.Join(", ", favorites.Select(f => f.Enabled ? $"{f.Name}@{f.WorldName}" : $"{f.Name}@{f.WorldName} (disabled)"))}");
+                return;
+
+            case "clear":
+                if (favorites.Count == 0)
+                {
+                    Svc.Log.Debug("Auto Pillion: favorites already empty. (already was, no change)");
+                    return;
+                }
+                favorites.Clear();
+                Plugin.Configuration.Save();
+                Print("Auto Pillion: favorites cleared.");
+                return;
+
+            default:
+                Print($"Usage: /Nonuglon {CommandNames[0]} target <add|remove|enable|disable|list|clear> [name@world]");
+                return;
+        }
+    }
+
+    /// <summary>Splits "Firstname Lastname@World" on the LAST '@' - character
+    /// names never contain '@' and world names never contain spaces, so this is
+    /// unambiguous even though the name half can have a space in it.</summary>
+    private static bool TryParseNameAtWorld(string raw, out string name, out string world)
+    {
+        var at = raw.LastIndexOf('@');
+        if (at <= 0 || at == raw.Length - 1)
+        {
+            name = string.Empty;
+            world = string.Empty;
+            return false;
+        }
+
+        name = raw[..at].Trim();
+        world = raw[(at + 1)..].Trim();
+        return !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(world);
     }
 }

@@ -118,7 +118,7 @@ public class ConfigWindow : Window, IDisposable
             if (enabled) tweak.EnableTweak();
             else tweak.DisableTweak();
 
-            GetToggleAction(tweak)(enabled);
+            tweak.ConfigEnabled = enabled;
             configuration.Save();
         }
 
@@ -146,17 +146,4 @@ public class ConfigWindow : Window, IDisposable
         if (!tweak.Enabled) return ("\u25cb", UiColors.Disabled);
         return ("\u25cf", tweak.HasWarning ? UiColors.Warning : UiColors.Enabled);
     }
-
-    /// <summary>Maps a tweak instance to the Configuration bool it persists to.
-    /// Kept as an explicit switch rather than reflection - Configuration is a small,
-    /// flat, strongly-typed POCO, and TweakBase's own design philosophy is "no
-    /// reflection-driven config", so this stays consistent with that.</summary>
-    private Action<bool> GetToggleAction(TweakBase tweak) => tweak switch
-    {
-        InstantReturn => enabled => configuration.InstantReturnEnabled = enabled,
-        AutoPillion => enabled => configuration.AutoPillionEnabled = enabled,
-        EntrustChocoboDuplicates => enabled => configuration.EntrustChocoboDuplicatesEnabled = enabled,
-        SearchInfoMenu => enabled => configuration.SearchInfoMenuEnabled = enabled,
-        _ => _ => { }
-    };
 }
