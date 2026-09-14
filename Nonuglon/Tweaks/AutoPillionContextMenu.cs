@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui.ContextMenu;
 using ECommons.DalamudServices;
 using Nonuglon.Support;
@@ -51,6 +52,14 @@ public class AutoPillionContextMenu : IDisposable
     {
         if (!ValidAddons.Contains(args.AddonName)) return;
         if (args.Target is not MenuTargetDefault target || string.IsNullOrEmpty(target.TargetName)) return;
+
+        // TargetObject is only populated when the game object is actually
+        // nearby/rendered (e.g. nameplate/target context menu) - friend list,
+        // party list, etc. right-clicks are always players anyway and won't have
+        // a TargetObject, so only filter when we actually have one to check.
+        // Excludes NPCs, mobs, minions, and other non-player objects from getting
+        // the menu item in the first place.
+        if (target.TargetObject is { } obj && obj.ObjectKind != ObjectKind.Pc) return;
 
         args.AddMenuItem(menuItem);
     }
