@@ -55,6 +55,12 @@ public class Configuration : IPluginConfiguration
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = true;
 
     public bool SearchInfoMenuEnabled { get; set; } = false;
+    /// <summary>Chat 2's own right-click-a-message context menu integration for
+    /// View Search Info (requires Chat 2 installed; harmlessly inert otherwise).
+    /// Off by default, same as AutoPillionChat2ContextMenuEnabled - independently
+    /// toggleable from the tweak's native right-click menu, which is always active
+    /// whenever the tweak itself is enabled.</summary>
+    public bool SearchInfoMenuChat2ContextMenuEnabled { get; set; } = false;
 
     // The below exists just to make saving less cumbersome
     public void Save()

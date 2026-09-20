@@ -5,6 +5,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using ECommons;
 using ECommons.EzIpcManager;
+using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
@@ -42,7 +43,7 @@ public class AutoPillionChat2Ipc : IDisposable
     {
         if (id != currentId || sender is null) return;
 
-        if (ImGui.Selectable("Add to Auto Pillion"))
+        if (ImGui.Selectable($"[{ContextMenuBranding.PrefixChar}] Add to AutoPillion"))
         {
             var favorites = Plugin.Configuration.AutoPillionFavorites;
             var worldId = sender.World.RowId;

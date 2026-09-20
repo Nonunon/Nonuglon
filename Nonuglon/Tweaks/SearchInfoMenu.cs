@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Plugin.Services;
@@ -65,11 +66,14 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         PrefixColor = ContextMenuBranding.PrefixColor,
     };
 
+    private SearchInfoChat2Ipc? chat2Ipc;
+
     protected override void Enable()
     {
         menuItem.OnClicked = OpenSearchInfo;
         Svc.ContextMenu.OnMenuOpened += OnContextMenuOpened;
         Svc.Framework.Update += OnFrameworkUpdate;
+        SyncChat2Integration(tweakEnabled: true);
     }
 
     protected override void Disable()
@@ -77,6 +81,44 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         Svc.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
         Svc.Framework.Update -= OnFrameworkUpdate;
         FreeRetainedCharacterData();
+        SyncChat2Integration(tweakEnabled: false);
+    }
+
+    /// <summary>Creates or tears down the Chat 2 IPC integration to match config,
+    /// given whether the tweak itself is (about to be) enabled. Same timing caveat
+    /// as AutoPillion.SyncIntegrations: TweakBase.EnableTweak() only flips Enabled
+    /// to true AFTER Enable() returns, so Enable()/Disable() above pass an explicit
+    /// flag instead of relying on reading Enabled directly. DrawOptions' checkbox
+    /// (called well after EnableTweak() has completed) can read Enabled directly.</summary>
+    public void SyncChat2Integration(bool tweakEnabled)
+    {
+        var want = tweakEnabled && Plugin.Configuration.SearchInfoMenuChat2ContextMenuEnabled;
+        if (want && chat2Ipc is null) chat2Ipc = new SearchInfoChat2Ipc(this);
+        else if (!want && chat2Ipc is not null) { chat2Ipc.Dispose(); chat2Ipc = null; }
+    }
+
+    public override void DrawOptions()
+    {
+        var config = Plugin.Configuration;
+
+        ImGui.TextDisabled("Context menu integrations:");
+
+        var chat2Enabled = config.SearchInfoMenuChat2ContextMenuEnabled;
+        if (ImGui.Checkbox("Chat 2 Context Menu##SearchInfoMenuChat2ContextMenu", ref chat2Enabled))
+        {
+            config.SearchInfoMenuChat2ContextMenuEnabled = chat2Enabled;
+            config.Save();
+            SyncChat2Integration(tweakEnabled: Enabled);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Right-click a name in Chat 2's own chat log, then look under Integrations for \"View Search Info\". Requires the Chat 2 plugin, and only works while the sender is actually nearby/rendered (same as the native right-click version).");
+
+        if (chat2Enabled && !PluginDetection.IsPluginLoaded("ChatTwo"))
+        {
+            ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+            ImGui.TextColored(UiColors.Warning, "Chat 2 not detected - this integration has no effect until it's installed and loaded.");
+            ImGui.PopTextWrapPos();
+        }
     }
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)
@@ -92,6 +134,15 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         if (args.Target is not MenuTargetDefault { TargetObject: IPlayerCharacter player } || IsLocalPlayer(player))
             return;
 
+        OpenSearchInfoFor(player);
+    }
+
+    /// <summary>Core "open the Search Info window for this player" logic, shared
+    /// by the native right-click menu (OpenSearchInfo above) and the Chat 2 IPC
+    /// integration (SearchInfoChat2Ipc) - both just need a live IPlayerCharacter
+    /// to build native CharacterData from.</summary>
+    internal void OpenSearchInfoFor(IPlayerCharacter player)
+    {
         var agentDetail = AgentDetail.Instance();
         var nativeCharacter = (Character*)player.Address;
         if (agentDetail == null || nativeCharacter == null)
@@ -110,7 +161,7 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         }
     }
 
-    private static bool IsLocalPlayer(IPlayerCharacter player)
+    internal static bool IsLocalPlayer(IPlayerCharacter player)
     {
         var localPlayer = Svc.Objects.LocalPlayer;
         return localPlayer != null && player.GameObjectId == localPlayer.GameObjectId;
