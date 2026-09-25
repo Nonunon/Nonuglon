@@ -18,7 +18,11 @@ namespace Nonuglon.Tweaks;
 /// SafeWrapper.AnyException means EzIPC.Init just leaves Register/Unregister
 /// unresolved instead of throwing, so Available()/Dispose() safely do nothing.
 ///
-/// Ported from HuntTrainAssistant's Services/Chat2IPC.cs (NightmareXIV).</summary>
+/// Ported from HuntTrainAssistant's (https://github.com/NightmareXIV/HuntTrainAssistant -
+/// a Dalamud plugin, so bound by Dalamud's own AGPL-3.0 regardless of its lack of a
+/// standalone LICENSE file) Services/Chat2IPC.cs - the Register/Unregister/Invoke
+/// shape here is what Chat 2's own IPC guide requires, not much room for it to look
+/// any other way.</summary>
 public class AutoPillionChat2Ipc : IDisposable
 {
     private string? currentId;

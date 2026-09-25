@@ -62,6 +62,8 @@ public class Configuration : IPluginConfiguration
     /// whenever the tweak itself is enabled.</summary>
     public bool SearchInfoMenuChat2ContextMenuEnabled { get; set; } = false;
 
+    public bool EstateTeleportationEnabled { get; set; } = false;
+
     // The below exists just to make saving less cumbersome
     public void Save()
     {

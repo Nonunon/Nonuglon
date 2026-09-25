@@ -10,6 +10,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Auto Pillion** - automatically hops onto a nearby mount with an open pillion seat. Can be restricted to a list of "favorite" people, via chat command, the config, or a "Add to Auto Pillion" entry (native context menu and/or Chat 2's). Also ported from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks).
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
+- **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend sharing your current world, opening the game's own friend estate-teleport window for them directly.
 
 Right-click (context menu) entries added by this plugin (Auto Pillion & Search Info Menu) have a green "N" badge.
 
@@ -43,6 +44,8 @@ All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or
 /Nonuglon entrustchocobo <on|off|toggle>           aliases: entrust, chocobo
 
 /Nonuglon searchinfo <on|off|toggle>
+
+/Nonuglon estateteleport <on|off|toggle>           alias: estate
 ```
 
 </details>
@@ -56,4 +59,4 @@ All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or
 
 ## Credit
 
-Built on top of the [Dalamud SamplePlugin template](https://github.com/goatcorp/SamplePlugin), using [ECommons](https://github.com/NightmareXIV/ECommons) for the usual Dalamud plumbing. Tweak logic adapted from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks) (aka Automaton/CBT) and [PandorasBox](https://github.com/PunishXIV/PandorasBox) as noted above - all credit for the original mechanics goes to their respective authors, this is just a personal repackaging of the bits I wanted, instead of pushing slop directly to them. ♥
+Built on top of the [Dalamud SamplePlugin template](https://github.com/goatcorp/SamplePlugin), using [ECommons](https://github.com/NightmareXIV/ECommons) for the usual Dalamud plumbing, with [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks) (aka Automaton/CBT) and [PandorasBox](https://github.com/PunishXIV/PandorasBox) as the main sources for the tweaks above - all credit for the original mechanics goes to their respective authors, this is just a personal repackaging of the bits I wanted, instead of pushing slop directly to them. ♥ Individual tweaks ported from elsewhere carry their own attribution in a doc comment at the top of their `.cs` file.

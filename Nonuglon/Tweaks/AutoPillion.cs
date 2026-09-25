@@ -11,7 +11,8 @@ using static Nonuglon.Support.CommandText;
 namespace Nonuglon.Tweaks;
 
 /// <summary>
-/// Ported from ffxiv-bundleoftweaks' Tweaks/AutoPillion.cs.
+/// Ported from ffxiv-bundleoftweaks' (https://github.com/Jaksuhn/ffxiv-bundleoftweaks,
+/// BSD-3-Clause-licensed) Tweaks/AutoPillion.cs.
 /// Automatically hops onto a nearby mount with an open pillion seat. Optionally
 /// restricted to a saved list of favorite people via config, populated either
 /// through this tweak's own options UI, the right-click context menu

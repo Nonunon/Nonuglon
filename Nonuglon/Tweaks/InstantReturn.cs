@@ -15,7 +15,8 @@ using static Nonuglon.Support.CommandText;
 namespace Nonuglon.Tweaks;
 
 /// <summary>
-/// Ported from ffxiv-bundleoftweaks' Tweaks/InstantReturn.cs.
+/// Ported from ffxiv-bundleoftweaks' (https://github.com/Jaksuhn/ffxiv-bundleoftweaks,
+/// BSD-3-Clause-licensed) Tweaks/InstantReturn.cs.
 ///
 /// The original used a custom [AddressHook&lt;T&gt;] attribute + source generator to
 /// wire up the hook. We're not vendoring that toolchain, so this hooks

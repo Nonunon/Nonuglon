@@ -17,7 +17,8 @@ using static ECommons.UIHelpers.AddonMasterImplementations.AddonMaster;
 namespace Nonuglon.Tweaks;
 
 /// <summary>
-/// Ported from PandorasBox's Features/UI/EntrustChocoboDuplicatesAB.cs.
+/// Ported from PandorasBox's (https://github.com/PunishXIV/PandorasBox,
+/// BSD-3-Clause-licensed) Features/UI/EntrustChocoboDuplicatesAB.cs.
 /// Re-hosted on TweakBase instead of PandorasBox's Feature/Overlays window system -
 /// draws directly off UiBuilder.Draw instead of going through P.Ws.
 /// </summary>

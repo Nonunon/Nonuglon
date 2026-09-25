@@ -9,11 +9,14 @@ namespace Nonuglon.Tweaks;
 
 /// <summary>Adds "Add as Auto Pillion favorite" to the right-click context menu on
 /// players in the party list, friend list, chat log, and similar windows. Ported
-/// from HuntTrainAssistant's ContextMenuManager.cs (NightmareXIV) - same
-/// OnMenuOpened/AddMenuItem pattern, trimmed down to just adding a favorite name
-/// rather than their cross-world hunt-train conductor assignment (we don't need the
-/// homeworld/public-world checks that exist there for cross-world lookups - Auto
-/// Pillion only ever cares about someone physically near you).</summary>
+/// from HuntTrainAssistant's (https://github.com/NightmareXIV/HuntTrainAssistant -
+/// a Dalamud plugin, so bound by Dalamud's own AGPL-3.0 regardless of its lack of a
+/// standalone LICENSE file) ContextMenuManager.cs - same OnMenuOpened/AddMenuItem
+/// pattern Dalamud's context-menu API itself dictates, trimmed down to just adding
+/// a favorite name rather than their cross-world hunt-train conductor assignment
+/// (we don't need the homeworld/public-world checks that exist there for
+/// cross-world lookups - Auto Pillion only ever cares about someone physically near
+/// you).</summary>
 public class AutoPillionContextMenu : IDisposable
 {
     // Addons where a right-click-a-player context menu makes sense. Trimmed from
