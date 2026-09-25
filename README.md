@@ -15,6 +15,9 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list (and similar list-style menus) who shares your current world, opening the game's own friend estate-teleport window for them directly. Doesn't duplicate it on their nameplate/model out in the world, since the game already shows it there natively.
+- **Inactive Window FPS Throttle** - once enabled, gives you a chat command and config-window checkbox for the game's own "Limit frame rate when client is inactive." System Configuration setting.
+
+All tweaks are off by default on a fresh install; nothing activates until you turn it on yourself.
 
 Right-click (context menu) entries added by this plugin (Auto Pillion & Search Info Menu) have a green "N" badge.
 
@@ -59,6 +62,9 @@ All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or
 /Nonuglon searchinfo <on|off|toggle>
 
 /Nonuglon estateteleport <on|off|toggle>           alias: estate
+
+/Nonuglon inactivefps <on|off|toggle>              enables the tweak itself
+/Nonuglon inactivefps limit <on|off|toggle>        changes the actual game setting; requires the tweak to be on
 ```
 
 </details>

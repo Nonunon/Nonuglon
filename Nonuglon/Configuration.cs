@@ -10,10 +10,13 @@ public class Configuration : IPluginConfiguration
     public int Version { get; set; } = 0;
 
     // -- Tweak toggles --
-    public bool InstantReturnEnabled { get; set; } = true;
+    // Every tweak defaults to off: nothing should start doing anything to a fresh
+    // install until the user explicitly opts in, even the "handful of things I
+    // actually wanted" ones from the README.
+    public bool InstantReturnEnabled { get; set; } = false;
     public bool InstantReturnLeaveParty { get; set; } = true;
 
-    public bool AutoPillionEnabled { get; set; } = true;
+    public bool AutoPillionEnabled { get; set; } = false;
     /// <summary>When true, Auto Pillion only offers a ride to people in
     /// AutoPillionFavorites, instead of anyone nearby in the party.</summary>
     public bool AutoPillionRestrictToPerson { get; set; } = false;
@@ -52,7 +55,7 @@ public class Configuration : IPluginConfiguration
     /// which is way too long for a "just try again" tweak like this.</summary>
     public int AutoPillionRetryTimeoutMs { get; set; } = 2000;
 
-    public bool EntrustChocoboDuplicatesEnabled { get; set; } = true;
+    public bool EntrustChocoboDuplicatesEnabled { get; set; } = false;
 
     public bool SearchInfoMenuEnabled { get; set; } = false;
     /// <summary>Chat 2's own right-click-a-message context menu integration for
@@ -63,6 +66,14 @@ public class Configuration : IPluginConfiguration
     public bool SearchInfoMenuChat2ContextMenuEnabled { get; set; } = false;
 
     public bool EstateTeleportationEnabled { get; set; } = false;
+
+    /// <summary>Whether the Inactive Window FPS Throttle tweak itself is on -
+    /// distinct from the live game setting it controls. Off by default like every
+    /// other tweak; the game's own "Limit frame rate when client is inactive."
+    /// value is only readable/settable via "/Nonuglon inactivefps limit ..." once
+    /// this is true, so the tweak never touches game config the user hasn't
+    /// explicitly opted into managing through Nonuglon.</summary>
+    public bool InactiveFpsEnabled { get; set; } = false;
 
     // The below exists just to make saving less cumbersome
     public void Save()

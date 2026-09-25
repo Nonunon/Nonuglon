@@ -103,6 +103,7 @@ public sealed class Plugin : IDalamudPlugin
         Tweaks.Add(new EntrustChocoboDuplicates());
         Tweaks.Add(new SearchInfoMenu());
         Tweaks.Add(new EstateTeleportation());
+        Tweaks.Add(new InactiveFps());
 
         foreach (var tweak in Tweaks)
         {
