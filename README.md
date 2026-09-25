@@ -66,9 +66,11 @@ Updates then show up the normal way, through the Plugin Installer, whenever a ne
 3. In-game: `/xlsettings` -> Experimental -> add the full path to `Nonuglon.dll` under Dev Plugin Locations.
 4. `/xlplugins` -> Dev Tools -> Installed Dev Plugins -> enable Nonuglon.
 
+Or run `build/Build_Nonuglon.bat`, which builds Release straight into the live Dev Plugin Locations folder (`F:\FFXIV\Plugins\DevPlugins\Nonuglon`), so a build + in-game reload picks up changes with no manual copying. `build/` is gitignored - these are local dev-convenience scripts, not part of what ships.
+
 ## Releasing
 
-Run `Release_Nonuglon.bat` (patch bump by default; `Release_Nonuglon.bat minor`, `major`, or an explicit version like `Release_Nonuglon.bat 1.4.0` also work; `-DryRun` shows the next version and runs the build check without tagging/pushing anything). It refuses to run with uncommitted changes or a local `master` that's out of sync with `origin/master`, runs a Release build first so a broken build never gets tagged, then asks for confirmation before tagging and pushing.
+Run `build/Release_Nonuglon.bat` (patch bump by default; `Release_Nonuglon.bat minor`, `major`, or an explicit version like `Release_Nonuglon.bat 1.4.0` also work; `-DryRun` shows the next version and runs the build check without tagging/pushing anything). It refuses to run with uncommitted changes or a local `master` that's out of sync with `origin/master`, runs a Release build first so a broken build never gets tagged, then asks for confirmation before tagging and pushing.
 
 Pushing that tag triggers [.github/workflows/release.yml](.github/workflows/release.yml), which builds Release, publishes it as a GitHub Release with `Nonuglon.zip` attached, and syncs `repo.json`'s `AssemblyVersion`/`DalamudApiLevel` from the build's own generated manifest. `repo.json`'s download links point at `.../releases/latest/download/Nonuglon.zip`, a stable URL that always resolves to the newest release, so nothing else needs to change per release. (Doing it by hand instead is just `git tag v1.0.0 && git push origin v1.0.0`.)
 

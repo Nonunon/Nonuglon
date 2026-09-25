@@ -3,3 +3,5 @@ obj/
 bin/
 *.user
 CLAUDE.md
+/build/
+/_release_check/
