@@ -1,20 +1,18 @@
-[
-  {
-    "Author": "Nonu",
-    "Name": "Nonuglon",
-    "InternalName": "Nonuglon",
-    "AssemblyVersion": "0.0.0.1",
-    "Description": "Little grab-bag of personal tweaks.",
-    "Punchline": "Nonu's personal grab-bag of tweaks.",
-    "ApplicableVersion": "any",
-    "Tags": [
-      "tweaks",
-      "automation"
-    ],
-    "DalamudApiLevel": 15,
-    "RepoUrl": "https://github.com/Nonunon/Nonuglon",
-    "DownloadLinkInstall": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip",
-    "DownloadLinkUpdate": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip",
-    "DownloadLinkTesting": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip"
-  }
-]
+{
+  "Author": "Nonu",
+  "Name": "Nonuglon",
+  "InternalName": "Nonuglon",
+  "AssemblyVersion": "0.0.1.0",
+  "Description": "Little grab-bag of personal tweaks.",
+  "Punchline": "Nonu's personal grab-bag of tweaks.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "tweaks",
+    "automation"
+  ],
+  "DalamudApiLevel": 15,
+  "RepoUrl": "https://github.com/Nonunon/Nonuglon",
+  "DownloadLinkInstall": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip",
+  "DownloadLinkUpdate": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip",
+  "DownloadLinkTesting": "https://github.com/Nonunon/Nonuglon/releases/latest/download/Nonuglon.zip"
+}
