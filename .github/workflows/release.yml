@@ -63,12 +63,17 @@ jobs:
           # API compatibility) are synced here. Description/Punchline/Tags are
           # repo.json's own presentation text - edit those by hand, they're
           # intentionally left alone.
+          # @(...) forces array semantics on the way in, and -InputObject (not a
+          # pipe) on the way out, since piping a single-element array into
+          # ConvertTo-Json unwraps it and re-serializes as a bare {...} object
+          # instead of a [...] array - which is exactly what broke repo.json after
+          # the v0.0.1 release (Dalamud's installer requires a JSON array here).
           $manifest = Get-Content build_output\Nonuglon.json -Raw | ConvertFrom-Json
-          $repo = Get-Content repo.json -Raw | ConvertFrom-Json
+          $repo = @(Get-Content repo.json -Raw | ConvertFrom-Json)
           $entry = $repo[0]
           $entry.AssemblyVersion = $manifest.AssemblyVersion
           $entry.DalamudApiLevel = $manifest.DalamudApiLevel
-          $repo | ConvertTo-Json -Depth 5 | Set-Content repo.json
+          ConvertTo-Json -InputObject $repo -Depth 5 | Set-Content repo.json
 
       - name: Commit repo.json
         shell: pwsh
