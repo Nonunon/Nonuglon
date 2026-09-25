@@ -7,7 +7,7 @@ processes:
   documentation: copilot
   testing: none
   review: pair
-  deployment: none
+  deployment: copilot
 ---
 
 This format is based on [AI-DECLARATION.md](https://ai-declaration.md/en/0.1.2).
@@ -24,7 +24,9 @@ This format is based on [AI-DECLARATION.md](https://ai-declaration.md/en/0.1.2).
   the AI against that direction, including command handling, config wiring, and
   bugfixes.
 - No formal automated test suite exists yet, hence `testing: none`.
-- CI/CD (`.github/`) has not been reviewed/authored by the AI at time of writing,
-  hence `deployment: none` - update this if that changes.
+- CI/CD (`repo.json`, `.github/workflows/release.yml`, the `build/` scripts) was
+  authored by the AI: the custom Dalamud plugin repository, the tag-triggered
+  release workflow, and the local build/release helper scripts, hence
+  `deployment: copilot`.
 - The owner reviews and directs all changes; nothing is committed without their
   prompt or approval.
