@@ -1,0 +1,91 @@
+name: Release Nonuglon
+
+# Triggered by pushing a version tag, e.g.:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# Builds Release, zips it, publishes a GitHub Release with that zip attached as
+# "Nonuglon.zip" (a fixed name, so repo.json's DownloadLink* URLs - which point at
+# .../releases/latest/download/Nonuglon.zip - never need to change), then syncs
+# repo.json's AssemblyVersion/DalamudApiLevel from the build's own generated
+# manifest and commits that back to master. Description/Punchline/Tags in
+# repo.json are hand-curated presentation text, not touched here on purpose - they
+# don't need to match the in-game plugin manifest's wording.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+
+      - name: Resolve version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build Nonuglon\Nonuglon.csproj -c Release -p:Version=${{ steps.version.outputs.version }} -o build_output
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path build_output\* -DestinationPath Nonuglon.zip -Force
+
+      - name: Sync repo.json from the built manifest
+        shell: pwsh
+        run: |
+          # Only the fields that must technically match the real build (version and
+          # API compatibility) are synced here. Description/Punchline/Tags are
+          # repo.json's own presentation text - edit those by hand, they're
+          # intentionally left alone.
+          $manifest = Get-Content build_output\Nonuglon.json -Raw | ConvertFrom-Json
+          $repo = Get-Content repo.json -Raw | ConvertFrom-Json
+          $entry = $repo[0]
+          $entry.AssemblyVersion = $manifest.AssemblyVersion
+          $entry.DalamudApiLevel = $manifest.DalamudApiLevel
+          $repo | ConvertTo-Json -Depth 5 | Set-Content repo.json
+
+      - name: Commit repo.json
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add repo.json
+          git diff --cached --quiet --exit-code
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "repo.json unchanged, nothing to commit."
+          } else {
+            git commit -m "Update repo.json for ${{ github.ref_name }}"
+            git push origin HEAD:master
+          }
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" Nonuglon.zip --title "${{ github.ref_name }}" --generate-notes
