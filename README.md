@@ -97,12 +97,6 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 4. In-game, open `/xlsettings`, go to Experimental, and add the full path to `Nonuglon.dll` under Dev Plugin Locations.
 5. Open `/xlplugins`, go to Dev Tools -> Installed Dev Plugins, and enable Nonuglon.
 
-**Automated, via script:**
-
-Run `build/Build_Nonuglon.bat`. It builds Release and drops the output directly into the live Dev Plugin Locations folder (`F:\FFXIV\Plugins\DevPlugins\Nonuglon`), so a build plus an in-game reload picks up changes with no manual copying.
-
-`build/` is gitignored - these are local dev-convenience scripts, not part of what ships.
-
 </details>
 
 ## Credit
