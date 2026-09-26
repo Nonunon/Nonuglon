@@ -19,8 +19,6 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
   - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
   - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
 
-All tweaks are off by default on a fresh install; nothing activates until you turn it on yourself.
-
 Right-click (context menu) entries added by this plugin (Auto Pillion & Search Info Menu) have a green "N" badge.
 
 ## Installing
