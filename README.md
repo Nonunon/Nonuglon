@@ -105,25 +105,6 @@ Run `build/Build_Nonuglon.bat`. It builds Release and drops the output directly 
 
 </details>
 
-## Releasing
-
-<details>
-<summary>Cut a new release</summary>
-
-**Steps:**
-
-1. Commit and push code changes to `master` as normal.
-2. Run `build/Release_Nonuglon.bat` from a clean, up-to-date working tree.
-   - Patch version bump by default; `Release_Nonuglon.bat minor`, `major`, or an explicit version such as `Release_Nonuglon.bat 1.4.0` also work.
-   - `-DryRun` shows the next version and runs the build check without tagging or pushing anything.
-3. Confirm the `y/N` prompt once the local build check passes.
-
-**What happens under the hood:**
-
-The script refuses to run with uncommitted changes, or with a local `master` out of sync with `origin/master`. It runs a Release build first, so a broken build never gets tagged. On confirmation, it tags and pushes, which triggers [.github/workflows/release.yml](.github/workflows/release.yml): that workflow builds Release, publishes a GitHub Release with `Nonuglon.zip` attached, syncs `repo.json`'s `AssemblyVersion` and `DalamudApiLevel` from the build's own generated manifest, and updates `Nonuglon.csproj`'s checked-in `<Version>` to match the tag (purely cosmetic, keeps a local dev build from showing a stale version number). `repo.json`'s download links point at `.../releases/latest/download/Nonuglon.zip`, a stable URL that always resolves to the newest release, so nothing else needs to change per release. The manual equivalent of the tag/push step is `git tag v1.0.0 && git push origin v1.0.0`.
-
-</details>
-
 ## Credit
 
 - Built on the [Dalamud SamplePlugin template](https://github.com/goatcorp/SamplePlugin).
