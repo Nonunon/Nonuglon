@@ -14,10 +14,10 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Auto Pillion** - automatically hops onto a nearby mount with an open pillion seat. Can be restricted to a list of "favorite" people, via chat command, the config, or a "Add to Auto Pillion" entry (native context menu and/or Chat 2's). Also ported from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks).
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
-- **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list (and similar list-style menus) who shares your current world, opening the game's own friend estate-teleport window for them directly. Doesn't duplicate it on their nameplate/model out in the world, since the game already shows it there natively.
-- **Commands** - a grab-bag of tiny single-setting "mini-tweaks", too small to need a full tweak of their own. Turning Commands off disables every mini-tweak's actual effect at once, without losing which ones you'd individually checked.
-  - **Inactive Window FPS Throttle** - a chat command and config-window checkbox for the game's own "Limit frame rate when client is inactive." System Configuration setting. Needs both Commands and this mini-tweak's own checkbox on before it does anything.
-  - **Render Toggle** - flips [ECommons](https://github.com/NightmareXIV/ECommons)' cross-plugin "disable 3D world rendering" request, to cut GPU/CPU load while AFK or tabbed away without closing the game. Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active, so it's hard to forget it's on.
+- **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list who shares your current world, opening estate-teleport window for them directly.
+- **Commands** - a grab-bag of tiny single-setting "mini-tweaks".
+  - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
+  - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
 
 All tweaks are off by default on a fresh install; nothing activates until you turn it on yourself.
 
