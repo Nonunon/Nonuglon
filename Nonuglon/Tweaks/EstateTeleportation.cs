@@ -1,4 +1,5 @@
 using System;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
@@ -6,6 +7,7 @@ using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Nonuglon.Support;
+using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
@@ -52,11 +54,23 @@ public sealed unsafe class EstateTeleportation : TweakBase
     /// context.</summary>
     private uint generation;
 
+    /// <summary>Last failure message shown in chat via OpenEstate, or null if the
+    /// most recent attempt succeeded (or none has happened yet). Suppresses
+    /// repeat chat spam for the *same* failure - clicking a stale menu item
+    /// again and again shouldn't reprint the same line every time - while a
+    /// genuinely different failure, or a subsequent success, is free to show
+    /// again immediately.</summary>
+    private string? lastReportedFailure;
+
     protected override void Enable()
     {
-        if (AgentFriendlist.MemberFunctionPointers.OpenFriendEstateTeleportation == null)
-            throw new InvalidOperationException("The game's estate teleportation function could not be resolved.");
-
+        // Deliberately does NOT throw when the native function can't be
+        // resolved: OnMenuOpened/OpenEstate below already independently guard
+        // against that (the menu item still gets added, but clicking it just
+        // logs/reports a failure instead of crashing). Enabled needs to stay
+        // true in that case for HasWarning below to actually be reachable -
+        // EnableTweak() catches a throw here by leaving Enabled false, which
+        // would make "Enabled && (native fn missing)" permanently false.
         generation++;
         Svc.ContextMenu.OnMenuOpened += OnMenuOpened;
         Svc.ClientState.Logout += OnLogout;
@@ -68,9 +82,19 @@ public sealed unsafe class EstateTeleportation : TweakBase
         Svc.ContextMenu.OnMenuOpened -= OnMenuOpened;
         Svc.ClientState.Logout -= OnLogout;
         Svc.ClientState.TerritoryChanged -= OnTerritoryChanged;
+        lastReportedFailure = null;
     }
 
     public override bool HasWarning => Enabled && AgentFriendlist.MemberFunctionPointers.OpenFriendEstateTeleportation == null;
+
+    public override void DrawOptions()
+    {
+        if (!HasWarning) return;
+
+        ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+        ImGui.TextColored(UiColors.Warning, "The game's estate teleportation function could not be resolved - this tweak has no effect right now.");
+        ImGui.PopTextWrapPos();
+    }
 
     private void OnLogout(int type, int code) => generation++;
 
@@ -167,22 +191,35 @@ public sealed unsafe class EstateTeleportation : TweakBase
         {
             if (ResolveFriend(contentId, name, world) != contentId)
             {
-                Svc.Log.Warning($"[{Name}] The friend or current world changed since the menu was opened - reopen it and try again.");
+                ReportFailure("The friend or current world changed since the menu was opened - reopen it and try again.");
                 return;
             }
 
             var agent = AgentFriendlist.Instance();
             if (agent == null || AgentFriendlist.MemberFunctionPointers.OpenFriendEstateTeleportation == null)
             {
-                Svc.Log.Warning($"[{Name}] The game's friend estate selector isn't ready.");
+                ReportFailure("The game's friend estate selector isn't ready.");
                 return;
             }
 
             agent->OpenFriendEstateTeleportation(contentId);
+            lastReportedFailure = null;
         }
         catch (Exception ex)
         {
             Svc.Log.Warning(ex, $"[{Name}] Could not open the friend estate selector.");
+            ReportFailure("Could not open the friend estate selector - see the plugin log for details.");
         }
+    }
+
+    /// <summary>Prints a failure to chat only if it differs from the last one
+    /// already shown (see lastReportedFailure) - always logged, but chat only
+    /// gets a fresh line once per distinct failure state.</summary>
+    private void ReportFailure(string message)
+    {
+        Svc.Log.Warning($"[{Name}] {message}");
+        if (lastReportedFailure == message) return;
+        lastReportedFailure = message;
+        Print($"{Name}: {message}");
     }
 }

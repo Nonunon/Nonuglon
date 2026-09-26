@@ -31,12 +31,15 @@ public sealed class Plugin : IDalamudPlugin
     // -- Tweaks --
     public readonly List<TweakBase> Tweaks = [];
 
-    /// <summary>Maps each tweak's CommandNames (canonical name + aliases) to the
-    /// tweak instance itself, built once from Tweaks below. Lets OnCommand route a
-    /// chat subcommand to the right tweak's HandleCommand without a hand-maintained
-    /// case per tweak - adding a tweak to the list above is enough to also wire up
-    /// its chat command(s), as long as it declares CommandNames.</summary>
-    private readonly Dictionary<string, TweakBase> tweakCommands = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Maps each tweak's CommandNames (canonical name + aliases) - and
+    /// each mini-tweak's own CommandName, as a standalone "super alias" alongside
+    /// its nested "/Nonuglon commands &lt;name&gt; ..." path (see Commands.cs) -
+    /// to that tweak or mini-tweak's HandleCommand. Lets OnCommand route a chat
+    /// subcommand without a hand-maintained case per tweak - adding a tweak to
+    /// the list below is enough to also wire up its chat command(s).</summary>
+    private readonly Dictionary<string, Action<string[]>> tweakCommands = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly InactiveFps inactiveFps = new();
 
     public Plugin()
     {
@@ -88,6 +91,16 @@ public sealed class Plugin : IDalamudPlugin
             ShowInHelp = false
         });
 
+        // A standalone raw command for InactiveFps specifically - the "super
+        // alias" for the mini-tweak used often enough to want quicker access
+        // than typing the full /Nonuglon prefix. Not hidden from help: unlike
+        // /nonuglon above (a pure duplicate), this is a genuinely shorter path.
+        CommandManager.AddHandler($"/{inactiveFps.CommandName}", new CommandInfo(
+            (_, args) => inactiveFps.HandleCommand(args.Split(' ', StringSplitOptions.RemoveEmptyEntries)))
+        {
+            HelpMessage = $"Alias for /Nonuglon {inactiveFps.CommandName}. See /Nonuglon help."
+        });
+
         // Tell the UI system that we want our windows to be drawn through the window system
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
 
@@ -103,15 +116,21 @@ public sealed class Plugin : IDalamudPlugin
         Tweaks.Add(new EntrustChocoboDuplicates());
         Tweaks.Add(new SearchInfoMenu());
         Tweaks.Add(new EstateTeleportation());
-        Tweaks.Add(new InactiveFps());
+        Tweaks.Add(new Commands(inactiveFps));
 
         foreach (var tweak in Tweaks)
         {
             foreach (var name in tweak.CommandNames)
-                tweakCommands[name] = tweak;
+                tweakCommands[name] = tweak.HandleCommand;
 
             if (tweak.ConfigEnabled) tweak.EnableTweak();
         }
+
+        // inactiveFps also gets its own top-level alias (e.g. "/Nonuglon
+        // inactivefps ...") in addition to being reachable via its parent
+        // Commands tweak's own subcommand routing ("/Nonuglon commands
+        // inactivefps ..."), and the raw "/inactivefps" handler registered above.
+        tweakCommands[inactiveFps.CommandName] = inactiveFps.HandleCommand;
 
         Log.Information($"{PluginInterface.Manifest.Name} v{PluginInterface.Manifest.AssemblyVersion} loaded. " +
             string.Join(", ", Tweaks.ConvertAll(tweak => $"{tweak.Name}={tweak.ConfigEnabled}")));
@@ -135,6 +154,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.RemoveHandler(CommandName);
         CommandManager.RemoveHandler(CommandNameAlias);
+        CommandManager.RemoveHandler($"/{inactiveFps.CommandName}");
 
         ECommonsMain.Dispose();
     }
@@ -159,8 +179,8 @@ public sealed class Plugin : IDalamudPlugin
                 PrintUsage();
                 break;
             default:
-                if (tweakCommands.TryGetValue(parts[0], out var tweak))
-                    tweak.HandleCommand(parts[1..]);
+                if (tweakCommands.TryGetValue(parts[0], out var handler))
+                    handler(parts[1..]);
                 else
                     Print($"Unknown subcommand \"{parts[0]}\". Try /Nonuglon help.");
                 break;

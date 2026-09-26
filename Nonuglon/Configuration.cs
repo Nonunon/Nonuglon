@@ -67,11 +67,19 @@ public class Configuration : IPluginConfiguration
 
     public bool EstateTeleportationEnabled { get; set; } = false;
 
-    /// <summary>Whether the Inactive Window FPS Throttle tweak itself is on -
-    /// distinct from the live game setting it controls. Off by default like every
-    /// other tweak; the game's own "Limit frame rate when client is inactive."
-    /// value is only readable/settable via "/Nonuglon inactivefps limit ..." once
-    /// this is true, so the tweak never touches game config the user hasn't
+    /// <summary>Master switch for the "Commands" tweak - a grab-bag of tiny
+    /// single-setting mini-tweaks (see Tweaks/Commands.cs, Tweaks/IMiniTweak.cs).
+    /// Turning this off disables every mini-tweak's actual effect without
+    /// touching their own individual XxxEnabled flags below, so re-enabling it
+    /// picks up exactly whichever ones were checked before.</summary>
+    public bool CommandsEnabled { get; set; } = false;
+
+    /// <summary>Whether the Inactive Window FPS Throttle mini-tweak itself is on -
+    /// distinct from both the live game setting it controls AND from
+    /// CommandsEnabled above. Off by default like everything else; the game's own
+    /// "Limit frame rate when client is inactive." value is only readable/settable
+    /// via "/Nonuglon inactivefps limit ..." once BOTH this and CommandsEnabled
+    /// are true, so the mini-tweak never touches game config the user hasn't
     /// explicitly opted into managing through Nonuglon.</summary>
     public bool InactiveFpsEnabled { get; set; } = false;
 

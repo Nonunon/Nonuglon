@@ -43,11 +43,13 @@ public unsafe class InstantReturn : TweakBase
 
     public override string[] CommandNames => ["instantreturn", "quickreturn"];
 
+    // The "leaveparty" subcommand only shows up (and only works, see
+    // HandleCommand below) once the tweak itself is on - while it's off there's
+    // nothing beyond the plain on/off/toggle to advertise.
     public override string[] UsageLines =>
-    [
-        ..base.UsageLines,
-        $"/Nonuglon {CommandNames[0]} leaveparty <on|off|toggle>",
-    ];
+        Enabled
+            ? [..base.UsageLines, $"/Nonuglon {CommandNames[0]} leaveparty <on|off|toggle>"]
+            : base.UsageLines;
 
     private const int ReturnGeneralActionId = 8;
 
@@ -89,7 +91,10 @@ public unsafe class InstantReturn : TweakBase
 
     public override void HandleCommand(string[] args)
     {
-        if (args.Length >= 1 && args[0].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
+        // Only recognized while the tweak is on - disabled, this falls straight
+        // through to the plain on/off/toggle usage error below, exactly as if
+        // "leaveparty" were never a valid word here.
+        if (Enabled && args.Length >= 1 && args[0].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
         {
             if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.InstantReturnLeaveParty, out var leaveParty))
             {

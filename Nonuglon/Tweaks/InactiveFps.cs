@@ -7,79 +7,108 @@ using static Nonuglon.Support.CommandText;
 namespace Nonuglon.Tweaks;
 
 /// <summary>
-/// Chat-command toggle over the game's own System Configuration option
+/// Mini-tweak (see IMiniTweak.cs / Commands.cs) wrapping the game's own System
+/// Configuration option
 /// (https://dalamud.dev/api/Dalamud.Game.Config/Enums/SystemConfigOption/#fpsinactive)
-/// - "Limit frame rate when client is inactive.". No hook to install: ConfigEnabled
-/// here means "is this tweak allowed to touch that setting at all", backed by its
-/// own Configuration field like every other tweak, deliberately kept separate from
-/// the live game value itself - so enabling the tweak never implicitly flips the
-/// game's setting, and the game's setting can't be changed through Nonuglon while
-/// the tweak is off. The actual read/write happens only via the "limit" subcommand,
-/// gated on Enabled.
+/// - "Limit frame rate when client is inactive.". Its own Enabled flag is kept
+/// separate from Commands' master switch: both need to be true (see
+/// EffectivelyEnabled) before the "limit" subcommand or checkbox actually
+/// touches the live game setting, so checking this alone (with Commands off) or
+/// Commands alone (with this unchecked) is inert by design - the checkbox itself
+/// stays togglable either way, only the *effect* is gated.
+///
+/// Sets via the uint overload (0u/1u) rather than the bool overload: reading
+/// Dalamud's own GameConfigSection source, the uint/float/string setters marshal
+/// onto the framework thread (RunOnFrameworkThread) but the bool overload
+/// doesn't. Both HandleCommand and DrawRow here already run on the framework
+/// thread in Dalamud's normal execution model, so this isn't fixing a live bug -
+/// it's cheap insurance against that asymmetry ever mattering if this code is
+/// ever called from somewhere that isn't.
 /// </summary>
-public class InactiveFps : TweakBase
+public class InactiveFps : IMiniTweak
 {
-    public override string Name => "Inactive Window FPS Throttle";
-    public override string Description => "Toggle the game's own \"Limit frame rate when client is inactive.\" System Configuration setting.";
+    public string Name => "Inactive Window FPS Throttle";
+    public string Description => "Toggle the game's own \"Limit frame rate when client is inactive.\" System Configuration setting.";
 
-    public override bool ConfigEnabled
+    public bool Enabled
     {
         get => Plugin.Configuration.InactiveFpsEnabled;
         set => Plugin.Configuration.InactiveFpsEnabled = value;
     }
 
-    public override string[] CommandNames => ["inactivefps"];
+    public string CommandName => "inactivefps";
 
-    public override string[] UsageLines =>
-    [
-        ..base.UsageLines,
-        $"/Nonuglon {CommandNames[0]} limit <on|off|toggle>",
-    ];
+    // "limit" only shows up (and only works, see HandleCommand below) once
+    // EffectivelyEnabled - while off there's nothing beyond the plain
+    // on/off/toggle to advertise.
+    public string[] UsageLines =>
+        EffectivelyEnabled
+            ? [$"/Nonuglon {CommandName} <on|off|toggle>", $"/Nonuglon {CommandName} limit <on|off|toggle>"]
+            : [$"/Nonuglon {CommandName} <on|off|toggle>"];
 
-    // Nothing to hook or clean up - this tweak's "on" state only gates whether the
-    // live game setting is reachable through Nonuglon, it doesn't install anything.
-    protected override void Enable() { }
-    protected override void Disable() { }
+    /// <summary>True only when both this mini-tweak AND Commands itself (the
+    /// master switch) are on - the actual gate the "limit" subcommand and
+    /// checkbox check before touching the live game setting.</summary>
+    private static bool EffectivelyEnabled => Plugin.Configuration.CommandsEnabled && Plugin.Configuration.InactiveFpsEnabled;
 
     private static bool TryGetLimit(out bool value) => Svc.GameConfig.TryGet(SystemConfigOption.FPSInActive, out value);
 
-    public override void DrawOptions()
+    public void DrawRow()
     {
-        ImGui.BeginDisabled(!Enabled);
+        var enabled = Enabled;
+        if (ImGui.Checkbox($"{Name}##InactiveFpsEnabled", ref enabled))
+        {
+            Enabled = enabled;
+            Plugin.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(Description);
+
+        ImGui.Indent();
+        ImGui.BeginDisabled(!EffectivelyEnabled);
 
         if (!TryGetLimit(out var limitEnabled))
         {
             ImGui.TextDisabled("Could not read the game's current setting.");
         }
-        else if (ImGui.Checkbox("Limit frame rate when client is inactive##InactiveFps", ref limitEnabled))
+        else if (ImGui.Checkbox("Limit frame rate when client is inactive##InactiveFpsLimit", ref limitEnabled))
         {
-            Svc.GameConfig.Set(SystemConfigOption.FPSInActive, limitEnabled);
+            Svc.GameConfig.Set(SystemConfigOption.FPSInActive, limitEnabled ? 1u : 0u);
         }
 
         ImGui.EndDisabled();
+        ImGui.Unindent();
     }
 
-    public override void HandleCommand(string[] args)
+    public void HandleCommand(string[] args)
     {
-        if (args.Length >= 1 && args[0].Equals("limit", StringComparison.OrdinalIgnoreCase))
+        // "limit" is only recognized as a subcommand at all once both this
+        // mini-tweak and Commands are on - while disabled it falls straight
+        // through to the plain on/off/toggle usage error below, exactly as if
+        // "limit" were never a valid word here, rather than hinting that it
+        // exists but needs something enabled first.
+        if (EffectivelyEnabled && args.Length >= 1 && args[0].Equals("limit", StringComparison.OrdinalIgnoreCase))
         {
-            if (!Enabled)
-            {
-                Print($"{Name} is off - enable it first with /Nonuglon {CommandNames[0]} on.");
-                return;
-            }
-
             if (!TryGetLimit(out var current) || args.Length < 2 || !ResolveBool(args[1], current, out var enabled))
             {
-                Print($"Usage: /Nonuglon {CommandNames[0]} limit <on|off|toggle>");
+                Print($"Usage: /Nonuglon {CommandName} limit <on|off|toggle>");
                 return;
             }
 
-            Svc.GameConfig.Set(SystemConfigOption.FPSInActive, enabled);
+            Svc.GameConfig.Set(SystemConfigOption.FPSInActive, enabled ? 1u : 0u);
             ReportStateChange($"{Name}: limit frame rate when inactive", current, enabled);
             return;
         }
 
-        base.HandleCommand(args);
+        if (args.Length == 0 || !ResolveBool(args[0], Enabled, out var enabledSelf))
+        {
+            Print($"Usage: /Nonuglon {CommandName} <on|off|toggle>");
+            return;
+        }
+
+        var previous = Enabled;
+        Enabled = enabledSelf;
+        Plugin.Configuration.Save();
+        ReportStateChange(Name, previous, enabledSelf);
     }
 }

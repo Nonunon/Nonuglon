@@ -15,7 +15,8 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list (and similar list-style menus) who shares your current world, opening the game's own friend estate-teleport window for them directly. Doesn't duplicate it on their nameplate/model out in the world, since the game already shows it there natively.
-- **Inactive Window FPS Throttle** - once enabled, gives you a chat command and config-window checkbox for the game's own "Limit frame rate when client is inactive." System Configuration setting.
+- **Commands** - a grab-bag of tiny single-setting "mini-tweaks", too small to need a full tweak of their own. Turning Commands off disables every mini-tweak's actual effect at once, without losing which ones you'd individually checked.
+  - **Inactive Window FPS Throttle** - a chat command and config-window checkbox for the game's own "Limit frame rate when client is inactive." System Configuration setting. Needs both Commands and this mini-tweak's own checkbox on before it does anything.
 
 All tweaks are off by default on a fresh install; nothing activates until you turn it on yourself.
 
@@ -36,6 +37,8 @@ Updates then show up the normal way, through the Plugin Installer, whenever a ne
 <summary>Full command reference</summary>
 
 All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or `toggle` (flips whatever it currently is).
+
+Each tweak's own on/off/toggle command always works, but any subcommand beyond that (`leaveparty`, `target`, `contextmenu`, `limit`, etc.) only exists once the tweak itself is on, both to run and in this list. Try one while its tweak is off and it's rejected exactly as if it were never a valid word, not told to turn the tweak on first.
 
 ```
 /Nonuglon                                          open the settings window
@@ -63,8 +66,14 @@ All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or
 
 /Nonuglon estateteleport <on|off|toggle>           alias: estate
 
-/Nonuglon inactivefps <on|off|toggle>              enables the tweak itself
-/Nonuglon inactivefps limit <on|off|toggle>        changes the actual game setting; requires the tweak to be on
+/Nonuglon commands <on|off|toggle>                 master switch for every mini-tweak below
+/Nonuglon commands inactivefps <on|off|toggle>      same as /Nonuglon inactivefps below
+/Nonuglon commands inactivefps limit <on|off|toggle>
+
+/Nonuglon inactivefps <on|off|toggle>              enables the mini-tweak itself; also a top-level alias for the above
+/Nonuglon inactivefps limit <on|off|toggle>        changes the actual game setting; needs Commands AND this on
+/inactivefps <on|off|toggle>                       same as /Nonuglon inactivefps - a shorter standalone alias
+/inactivefps limit <on|off|toggle>
 ```
 
 </details>
@@ -105,7 +114,7 @@ Run `build/Build_Nonuglon.bat`. It builds Release and drops the output directly 
 
 **What happens under the hood:**
 
-The script refuses to run with uncommitted changes, or with a local `master` out of sync with `origin/master`. It runs a Release build first, so a broken build never gets tagged. On confirmation, it tags and pushes, which triggers [.github/workflows/release.yml](.github/workflows/release.yml): that workflow builds Release, publishes a GitHub Release with `Nonuglon.zip` attached, and syncs `repo.json`'s `AssemblyVersion` and `DalamudApiLevel` from the build's own generated manifest. `repo.json`'s download links point at `.../releases/latest/download/Nonuglon.zip`, a stable URL that always resolves to the newest release, so nothing else needs to change per release. The manual equivalent of the tag/push step is `git tag v1.0.0 && git push origin v1.0.0`.
+The script refuses to run with uncommitted changes, or with a local `master` out of sync with `origin/master`. It runs a Release build first, so a broken build never gets tagged. On confirmation, it tags and pushes, which triggers [.github/workflows/release.yml](.github/workflows/release.yml): that workflow builds Release, publishes a GitHub Release with `Nonuglon.zip` attached, syncs `repo.json`'s `AssemblyVersion` and `DalamudApiLevel` from the build's own generated manifest, and updates `Nonuglon.csproj`'s checked-in `<Version>` to match the tag (purely cosmetic, keeps a local dev build from showing a stale version number). `repo.json`'s download links point at `.../releases/latest/download/Nonuglon.zip`, a stable URL that always resolves to the newest release, so nothing else needs to change per release. The manual equivalent of the tag/push step is `git tag v1.0.0 && git push origin v1.0.0`.
 
 </details>
 

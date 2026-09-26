@@ -8,9 +8,10 @@ name: Release Nonuglon
 # "Nonuglon.zip" (a fixed name, so repo.json's DownloadLink* URLs - which point at
 # .../releases/latest/download/Nonuglon.zip - never need to change), then syncs
 # repo.json's AssemblyVersion/DalamudApiLevel from the build's own generated
-# manifest and commits that back to master. Description/Punchline/Tags in
-# repo.json are hand-curated presentation text, not touched here on purpose - they
-# don't need to match the in-game plugin manifest's wording.
+# manifest AND Nonuglon.csproj's <Version> to match the tag, committing both back
+# to master. Description/Punchline/Tags in repo.json, and <Description> in the
+# csproj, are hand-curated presentation text, not touched here on purpose - they
+# don't need to match each other or the tag.
 
 on:
   push:
@@ -75,17 +76,29 @@ jobs:
           $entry.DalamudApiLevel = $manifest.DalamudApiLevel
           ConvertTo-Json -InputObject $repo -Depth 5 | Set-Content repo.json
 
-      - name: Commit repo.json
+      - name: Sync Nonuglon.csproj's checked-in <Version>
+        shell: pwsh
+        run: |
+          # Purely cosmetic (the build above already stamped the real
+          # AssemblyVersion via -p:Version=), but keeps a plain local
+          # `dotnet build`/Build_Nonuglon.bat from showing a stale version number
+          # in the Dev Plugins panel between releases.
+          $csprojPath = "Nonuglon\Nonuglon.csproj"
+          $csproj = Get-Content $csprojPath -Raw
+          $csproj = $csproj -replace '<Version>[^<]*</Version>', '<Version>${{ steps.version.outputs.version }}</Version>'
+          Set-Content -Path $csprojPath -Value $csproj -NoNewline
+
+      - name: Commit repo.json and csproj version
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add repo.json
+          git add repo.json Nonuglon\Nonuglon.csproj
           git diff --cached --quiet --exit-code
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "repo.json unchanged, nothing to commit."
+            Write-Host "Nothing changed, nothing to commit."
           } else {
-            git commit -m "Update repo.json for ${{ github.ref_name }}"
+            git commit -m "Update repo.json and csproj version for ${{ github.ref_name }}"
             git push origin HEAD:master
           }
 

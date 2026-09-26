@@ -38,15 +38,20 @@ public unsafe class AutoPillion : TweakBase
 
     public override string[] CommandNames => ["autopillion", "pillion"];
 
+    // All the subcommands beyond plain on/off/toggle only show up (and only
+    // work, see HandleCommand below) once the tweak itself is on.
     public override string[] UsageLines =>
-    [
-        ..base.UsageLines,
-        $"/Nonuglon {CommandNames[0]} restrict <on|off|toggle>",
-        $"/Nonuglon {CommandNames[0]} target <add|remove|enable|disable|list|clear> [name@world]",
-        $"/Nonuglon {CommandNames[0]} contextmenu <on|off|toggle>",
-        $"/Nonuglon {CommandNames[0]} chat2menu <on|off|toggle>",
-        $"/Nonuglon {CommandNames[0]} timeout <ms, 500-10000>",
-    ];
+        Enabled
+            ?
+            [
+                ..base.UsageLines,
+                $"/Nonuglon {CommandNames[0]} restrict <on|off|toggle>",
+                $"/Nonuglon {CommandNames[0]} target <add|remove|enable|disable|list|clear> [name@world]",
+                $"/Nonuglon {CommandNames[0]} contextmenu <on|off|toggle>",
+                $"/Nonuglon {CommandNames[0]} chat2menu <on|off|toggle>",
+                $"/Nonuglon {CommandNames[0]} timeout <ms, 500-10000>",
+            ]
+            : base.UsageLines;
 
     /// <summary>0 = idle/not attempting. Otherwise, the Environment.TickCount64 at
     /// which the current attempt should be considered timed out.</summary>
@@ -324,7 +329,11 @@ public unsafe class AutoPillion : TweakBase
 
     public override void HandleCommand(string[] args)
     {
-        if (args.Length == 0) { base.HandleCommand(args); return; }
+        // Every subcommand below only exists once the tweak itself is on - while
+        // it's off, this falls straight through to the plain on/off/toggle usage
+        // error at the bottom, exactly as if none of these words were ever valid
+        // here.
+        if (!Enabled || args.Length == 0) { base.HandleCommand(args); return; }
 
         switch (args[0].ToLowerInvariant())
         {
