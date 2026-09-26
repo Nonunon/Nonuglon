@@ -19,16 +19,14 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
   - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
   - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
 
-Right-click (context menu) entries added by this plugin (Auto Pillion & Search Info Menu) have a green "N" badge.
+Right-click (context menu) entries added by this plugin have a green "N" badge.
 
-## Installing
+## Instructions
 
 1. In-game, open `/xlsettings` and go to the Experimental tab.
 2. Under Custom Plugin Repositories, paste `https://raw.githubusercontent.com/Nonunon/Nonuglon/master/repo.json`, click Add, then Save.
-3. Open `/xlplugins` and find Nonuglon listed under the custom-repository section.
+3. Open `/xlplugins` and find `Nonuglon` listed under the `All Plugins` section.
 4. Click Install.
-
-Updates then show up the normal way, through the Plugin Installer, whenever a new version is released.
 
 ## Commands
 
@@ -37,7 +35,7 @@ Updates then show up the normal way, through the Plugin Installer, whenever a ne
 
 All toggles accept `on/off`, `true/false`, `1/0`, `yes/no`, `enable/disable`, or `toggle` (flips whatever it currently is).
 
-Each tweak's own on/off/toggle command always works, but any subcommand beyond that (`leaveparty`, `target`, `contextmenu`, `limit`, etc.) only exists once the tweak itself is on, both to run and in this list. Try one while its tweak is off and it's rejected exactly as if it were never a valid word, not told to turn the tweak on first.
+Each tweak's own on/off/toggle command always works, but any subcommand beyond that (`leaveparty`, `target`, `contextmenu`, `limit`, etc.) only exists once the tweak itself is turned on.
 
 ```
 /Nonuglon                                          open the settings window
