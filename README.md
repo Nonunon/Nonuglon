@@ -17,6 +17,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list (and similar list-style menus) who shares your current world, opening the game's own friend estate-teleport window for them directly. Doesn't duplicate it on their nameplate/model out in the world, since the game already shows it there natively.
 - **Commands** - a grab-bag of tiny single-setting "mini-tweaks", too small to need a full tweak of their own. Turning Commands off disables every mini-tweak's actual effect at once, without losing which ones you'd individually checked.
   - **Inactive Window FPS Throttle** - a chat command and config-window checkbox for the game's own "Limit frame rate when client is inactive." System Configuration setting. Needs both Commands and this mini-tweak's own checkbox on before it does anything.
+  - **Render Toggle** - flips [ECommons](https://github.com/NightmareXIV/ECommons)' cross-plugin "disable 3D world rendering" request, to cut GPU/CPU load while AFK or tabbed away without closing the game. Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active, so it's hard to forget it's on.
 
 All tweaks are off by default on a fresh install; nothing activates until you turn it on yourself.
 
@@ -74,6 +75,15 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon inactivefps limit <on|off|toggle>        changes the actual game setting; needs Commands AND this on
 /inactivefps <on|off|toggle>                       same as /Nonuglon inactivefps - a shorter standalone alias
 /inactivefps limit <on|off|toggle>
+
+/Nonuglon commands rendertoggle <on|off|toggle>
+/Nonuglon commands rendertoggle now <on|off|toggle>
+
+/Nonuglon rendertoggle <on|off|toggle>             enables the mini-tweak itself; also a top-level alias for the above
+/Nonuglon rendertoggle now <on|off|toggle>         flips 3D rendering; needs Commands AND this on
+/rendertoggle <on|off|toggle>                      same as /Nonuglon rendertoggle - a shorter standalone alias
+/rendertoggle now <on|off|toggle>
+/rendertoggle                                      no arguments: flips 3D rendering directly (mini-tweak must already be on)
 ```
 
 </details>

@@ -41,9 +41,7 @@ public class ConfigWindow : Window, IDisposable
 
         selectedIndex = Math.Clamp(selectedIndex, 0, plugin.Tweaks.Count - 1);
 
-        // All three panes drawn on the same row (SameLine(0, 0) - no default
-        // spacing) at the same explicit height, so the sidebar/splitter/details
-        // line up evenly regardless of how much content the selected tweak draws.
+        // Same row, same explicit height, so all three panes line up evenly.
         var paneHeight = ImGui.GetContentRegionAvail().Y;
 
         DrawSidebar(paneHeight);
@@ -53,9 +51,8 @@ public class ConfigWindow : Window, IDisposable
         DrawSelectedTweak(plugin.Tweaks[selectedIndex], paneHeight);
     }
 
-    /// <summary>Left pane: one selectable row per loaded tweak, driven entirely off
-    /// plugin.Tweaks - adding a tweak elsewhere in the plugin makes it show up here
-    /// automatically, no changes needed in this file.</summary>
+    /// <summary>Left pane: one row per loaded tweak, driven off plugin.Tweaks -
+    /// no changes needed here when a tweak is added.</summary>
     private void DrawSidebar(float height)
     {
         ImGui.BeginChild("##NonuglonSidebar", new Vector2(sidebarWidth, height), true);
@@ -74,11 +71,9 @@ public class ConfigWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    /// <summary>Thin invisible-button divider between the sidebar and detail pane.
-    /// Dragging it adjusts sidebarWidth directly via the mouse's per-frame delta,
-    /// clamped to a sane range so it can't be dragged down to nothing or out past
-    /// the window. Cursor swaps to a resize arrow on hover so it reads as
-    /// draggable before the user commits to clicking it.</summary>
+    /// <summary>Invisible-button divider; dragging adjusts sidebarWidth via
+    /// mouse delta, clamped to a sane range. Cursor swaps to resize-arrow on
+    /// hover.</summary>
     private void DrawSplitter(float height)
     {
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0f, 0f, 0f, 0f));
@@ -96,9 +91,8 @@ public class ConfigWindow : Window, IDisposable
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEw);
     }
 
-    /// <summary>Right pane: header, description, the enable checkbox (persisted via
-    /// GetToggleAction below), then whatever the tweak itself wants to draw via
-    /// DrawOptions().</summary>
+    /// <summary>Right pane: header, description, enable checkbox, then the
+    /// tweak's own DrawOptions().</summary>
     private void DrawSelectedTweak(TweakBase tweak, float height)
     {
         ImGui.BeginChild("##NonuglonTweakDetails", new Vector2(0, height), true);
@@ -134,13 +128,9 @@ public class ConfigWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    /// <summary>Shared status-dot glyph + color for a tweak, used by both the
-    /// sidebar row and the detail pane's On/Off label so the two never disagree.
-    /// Always the same filled/hollow circle glyphs (FFXIV's font doesn't carry the
-    /// Unicode warning-triangle glyph, so it silently fails to render) - the
-    /// warning state is conveyed by color alone: gray/hollow when off, amber-filled
-    /// when on but HasWarning is true (e.g. a required companion plugin is
-    /// missing), green-filled when on and functioning normally.</summary>
+    /// <summary>Shared status-dot glyph+color so the sidebar and detail pane
+    /// never disagree. Always the same circle glyph (FFXIV's font lacks a
+    /// warning-triangle) - warning is conveyed by color alone.</summary>
     private static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
     {
         if (!tweak.Enabled) return ("\u25cb", UiColors.Disabled);

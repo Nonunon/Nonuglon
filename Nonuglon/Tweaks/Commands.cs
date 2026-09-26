@@ -5,17 +5,11 @@ using Dalamud.Bindings.ImGui;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Master switch for a grab-bag of tiny, single-setting "mini-tweaks" too small
-/// to justify their own sidebar entry (see IMiniTweak.cs) - currently just
-/// InactiveFps. Turning Commands off disables every mini-tweak's actual effect
-/// at once without losing their individual on/off state (each keeps its own
-/// Configuration flag, checkable/uncheckable regardless of Commands' state);
-/// turning Commands back on picks up exactly whichever ones were individually
-/// checked. Each mini-tweak is also reachable as a standalone
-/// "/Nonuglon &lt;name&gt; ..." alias (wired up in Plugin.cs) in addition to
-/// "/Nonuglon commands &lt;name&gt; ...".
-/// </summary>
+/// <summary>Master switch for tiny single-setting "mini-tweaks" (IMiniTweak.cs).
+/// Turning this off disables every mini-tweak's effect without touching their
+/// own Configuration flags, so re-enabling picks up what was checked before.
+/// Each mini-tweak is also reachable as a standalone "/Nonuglon &lt;name&gt;
+/// ..." alias (Plugin.cs), not just nested under "commands".</summary>
 public class Commands : TweakBase
 {
     public override string Name => "Commands";
@@ -33,9 +27,7 @@ public class Commands : TweakBase
 
     public Commands(params IMiniTweak[] miniTweaks) => this.miniTweaks = miniTweaks.ToList();
 
-    // Nothing to hook - Commands itself has no behavior beyond gating the
-    // mini-tweaks it hosts, which each check Plugin.Configuration.CommandsEnabled
-    // directly rather than holding a reference back to this instance.
+    // Nothing to hook; mini-tweaks check Plugin.Configuration.CommandsEnabled directly.
     protected override void Enable() { }
     protected override void Disable() { }
 
@@ -54,12 +46,8 @@ public class Commands : TweakBase
 
     public override void HandleCommand(string[] args)
     {
-        // Nested "/Nonuglon commands <name> ..." routing only exists while
-        // Commands itself is on - while off, this falls straight through to the
-        // plain on/off/toggle usage error below, exactly as if no mini-tweak
-        // name were ever valid here. Each mini-tweak's own standalone alias
-        // (e.g. "/Nonuglon inactivefps ...", wired up separately in Plugin.cs)
-        // is unaffected by this - it's that mini-tweak's own direct head command.
+        // Nested routing only exists while Commands is on; each mini-tweak's
+        // own standalone alias (Plugin.cs) is unaffected by this.
         if (Enabled && args.Length >= 1)
         {
             var mini = miniTweaks.FirstOrDefault(m => m.CommandName.Equals(args[0], StringComparison.OrdinalIgnoreCase));
@@ -71,5 +59,12 @@ public class Commands : TweakBase
         }
 
         base.HandleCommand(args);
+    }
+
+    public override void Dispose()
+    {
+        foreach (var mini in miniTweaks)
+            mini.Dispose();
+        base.Dispose();
     }
 }

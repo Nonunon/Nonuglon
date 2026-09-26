@@ -9,14 +9,10 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "View Search Info" to Chat 2's own right-click-a-chat-message
-/// context menu, via the same EzIPC integration point AutoPillionChat2Ipc uses -
-/// see that file's doc comment for how Register/Unregister/Invoke work. Only
-/// shows up when the sender is actually a rendered/nearby player: opening the
-/// Search Info window needs their live Character* (for Sex/AccountId, which
-/// aren't in Chat 2's IPC payload), the same requirement the native right-click
-/// version has implicitly by only ever appearing on an already-rendered
-/// target.</summary>
+/// <summary>Adds "View Search Info" to Chat 2's right-click menu, via the same
+/// EzIPC point AutoPillionChat2Ipc uses. Only shows up for a rendered/nearby
+/// player: opening Search Info needs their live Character* for Sex/AccountId,
+/// which aren't in Chat 2's IPC payload.</summary>
 public class SearchInfoChat2Ipc : IDisposable
 {
     private readonly SearchInfoMenu owner;

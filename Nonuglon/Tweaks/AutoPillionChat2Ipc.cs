@@ -9,20 +9,15 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "Add as Auto Pillion favorite" to Chat 2's own right-click-a-
-/// chat-message context menu, via Chat 2's EzIPC-based integration point. Chat 2
-/// renders its own chat log outside the native game addons, so it doesn't fire
-/// Dalamud's normal OnMenuOpened/AddMenuItem system that AutoPillionContextMenu
-/// uses - it has its own IPC hook instead (Register/Unregister/Invoke, documented
-/// in Chat 2's own IPC guide). No-ops harmlessly if Chat 2 isn't installed:
-/// SafeWrapper.AnyException means EzIPC.Init just leaves Register/Unregister
-/// unresolved instead of throwing, so Available()/Dispose() safely do nothing.
-///
-/// Ported from HuntTrainAssistant's (https://github.com/NightmareXIV/HuntTrainAssistant -
-/// a Dalamud plugin, so bound by Dalamud's own AGPL-3.0 regardless of its lack of a
-/// standalone LICENSE file) Services/Chat2IPC.cs - the Register/Unregister/Invoke
-/// shape here is what Chat 2's own IPC guide requires, not much room for it to look
-/// any other way.</summary>
+/// <summary>Adds "Add as Auto Pillion favorite" to Chat 2's own right-click menu,
+/// via Chat 2's EzIPC hook (Register/Unregister/Invoke) rather than Dalamud's
+/// normal OnMenuOpened, since Chat 2 renders its own chat log outside the native
+/// addons. SafeWrapper.AnyException means EzIPC.Init leaves Register/Unregister
+/// unresolved (not throwing) when Chat 2 isn't installed, so this no-ops
+/// harmlessly. Ported from HuntTrainAssistant's
+/// (https://github.com/NightmareXIV/HuntTrainAssistant - a Dalamud plugin, so
+/// bound by Dalamud's own AGPL-3.0 regardless of its lack of a LICENSE file)
+/// Services/Chat2IPC.cs.</summary>
 public class AutoPillionChat2Ipc : IDisposable
 {
     private string? currentId;
@@ -33,9 +28,7 @@ public class AutoPillionChat2Ipc : IDisposable
     public AutoPillionChat2Ipc()
     {
         EzIPC.Init(this, "ChatTwo", SafeWrapper.AnyException);
-        // Register immediately in case Chat 2 was already loaded before Auto
-        // Pillion was enabled; Available() also re-fires this if Chat 2 loads or
-        // updates afterward.
+        // In case Chat 2 was already loaded; Available() re-fires this too.
         Available();
     }
 

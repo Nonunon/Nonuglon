@@ -31,25 +31,19 @@ public sealed class Plugin : IDalamudPlugin
     // -- Tweaks --
     public readonly List<TweakBase> Tweaks = [];
 
-    /// <summary>Maps each tweak's CommandNames (canonical name + aliases) - and
-    /// each mini-tweak's own CommandName, as a standalone "super alias" alongside
-    /// its nested "/Nonuglon commands &lt;name&gt; ..." path (see Commands.cs) -
-    /// to that tweak or mini-tweak's HandleCommand. Lets OnCommand route a chat
-    /// subcommand without a hand-maintained case per tweak - adding a tweak to
-    /// the list below is enough to also wire up its chat command(s).</summary>
+    /// <summary>Command name -> HandleCommand, for both tweaks and mini-tweaks'
+    /// top-level aliases. Lets OnCommand route without a hand-maintained case
+    /// per tweak.</summary>
     private readonly Dictionary<string, Action<string[]>> tweakCommands = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly InactiveFps inactiveFps = new();
+    private readonly RenderToggle renderToggle = new();
 
     public Plugin()
     {
-        // Only initializing the modules our tweaks actually touch. ObjectLife (VFX +
-        // GameObject ctor hooks) and SplatoonAPI are unused by anything in this plugin -
-        // dropping them removes that startup/shutdown noise from /xllog and skips
-        // installing hooks we never needed. DalamudReflector and ObjectFunctions are kept
-        // since ECommons.UIHelpers.AddonMasterImplementations (used by
-        // EntrustChocoboDuplicates) may depend on them internally - left in until
-        // confirmed otherwise.
+        // Only the ECommons modules our tweaks actually touch (DalamudReflector,
+        // ObjectFunctions for EntrustChocoboDuplicates) - others would just add
+        // startup/shutdown noise to /xllog.
         ECommonsMain.Init(PluginInterface, this, ECommons.Module.DalamudReflector, ECommons.Module.ObjectFunctions);
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
@@ -91,14 +85,23 @@ public sealed class Plugin : IDalamudPlugin
             ShowInHelp = false
         });
 
-        // A standalone raw command for InactiveFps specifically - the "super
-        // alias" for the mini-tweak used often enough to want quicker access
-        // than typing the full /Nonuglon prefix. Not hidden from help: unlike
-        // /nonuglon above (a pure duplicate), this is a genuinely shorter path.
+        // Standalone raw alias, quicker than typing the full /Nonuglon prefix.
         CommandManager.AddHandler($"/{inactiveFps.CommandName}", new CommandInfo(
             (_, args) => inactiveFps.HandleCommand(args.Split(' ', StringSplitOptions.RemoveEmptyEntries)))
         {
             HelpMessage = $"Alias for /Nonuglon {inactiveFps.CommandName}. See /Nonuglon help."
+        });
+
+        // Same idea, but a bare "/rendertoggle" (no args) is a special case that
+        // flips the state directly rather than hitting the usual usage error.
+        CommandManager.AddHandler($"/{renderToggle.CommandName}", new CommandInfo((_, args) =>
+        {
+            var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) renderToggle.ToggleAction();
+            else renderToggle.HandleCommand(parts);
+        })
+        {
+            HelpMessage = $"Alias for /Nonuglon {renderToggle.CommandName}. With no arguments, flips 3D rendering directly (mini-tweak must be on)."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -116,7 +119,7 @@ public sealed class Plugin : IDalamudPlugin
         Tweaks.Add(new EntrustChocoboDuplicates());
         Tweaks.Add(new SearchInfoMenu());
         Tweaks.Add(new EstateTeleportation());
-        Tweaks.Add(new Commands(inactiveFps));
+        Tweaks.Add(new Commands(inactiveFps, renderToggle));
 
         foreach (var tweak in Tweaks)
         {
@@ -126,11 +129,10 @@ public sealed class Plugin : IDalamudPlugin
             if (tweak.ConfigEnabled) tweak.EnableTweak();
         }
 
-        // inactiveFps also gets its own top-level alias (e.g. "/Nonuglon
-        // inactivefps ...") in addition to being reachable via its parent
-        // Commands tweak's own subcommand routing ("/Nonuglon commands
-        // inactivefps ..."), and the raw "/inactivefps" handler registered above.
+        // Mini-tweaks also get a top-level alias, alongside Commands' own
+        // nested routing and the raw commands registered above.
         tweakCommands[inactiveFps.CommandName] = inactiveFps.HandleCommand;
+        tweakCommands[renderToggle.CommandName] = renderToggle.HandleCommand;
 
         Log.Information($"{PluginInterface.Manifest.Name} v{PluginInterface.Manifest.AssemblyVersion} loaded. " +
             string.Join(", ", Tweaks.ConvertAll(tweak => $"{tweak.Name}={tweak.ConfigEnabled}")));
@@ -155,6 +157,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler(CommandName);
         CommandManager.RemoveHandler(CommandNameAlias);
         CommandManager.RemoveHandler($"/{inactiveFps.CommandName}");
+        CommandManager.RemoveHandler($"/{renderToggle.CommandName}");
 
         ECommonsMain.Dispose();
     }

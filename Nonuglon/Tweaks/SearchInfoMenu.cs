@@ -14,24 +14,17 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Ported from a friend's decompile of the standalone "SearchInfoMenu" plugin (not
-/// the original source - reworked here onto TweakBase/Svc instead of its own
-/// constructor-injected services). Adds "View Search Info" to the right-click
-/// context menu on other players, opening the game's Search Info / Character
-/// Look-up window (the one the Party Finder and Friend List use) for them directly,
-/// without needing to target or Examine them first.
+/// <summary>Ported from a friend's decompile of the standalone "SearchInfoMenu"
+/// plugin (not the original source), reworked onto TweakBase/Svc. Adds "View
+/// Search Info" to the right-click menu on other players, opening the game's
+/// Search Info window directly without targeting/Examine first.
 ///
-/// AgentDetail.OpenForCharacterData takes a pointer to an
-/// InfoProxyCommonList.CharacterData - the struct the game's own social lists use
-/// internally - rather than a GameObject/Character pointer, so one is synthesized
-/// here from the target IPlayerCharacter's public fields plus their native
-/// Character* (for ContentId, AccountId and Sex, which aren't exposed on
-/// IPlayerCharacter). AgentDetail keeps reading from that pointer for a bit after
-/// OpenForCharacterData returns rather than copying it in immediately, so the
-/// native buffer is retained for a few frames (see RetainedCharacterData) instead
-/// of being freed right away.
-/// </summary>
+/// AgentDetail.OpenForCharacterData wants an InfoProxyCommonList.CharacterData*,
+/// not a GameObject/Character pointer, so one is synthesized from the target's
+/// public fields plus their native Character* (for ContentId/AccountId/Sex,
+/// not exposed on IPlayerCharacter). It keeps reading from that pointer for a
+/// few frames after the call returns, hence RetainedCharacterData below rather
+/// than freeing immediately.</summary>
 public sealed unsafe class SearchInfoMenu : TweakBase
 {
     public override string Name => "Search Info Menu";
@@ -84,12 +77,9 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         SyncChat2Integration(tweakEnabled: false);
     }
 
-    /// <summary>Creates or tears down the Chat 2 IPC integration to match config,
-    /// given whether the tweak itself is (about to be) enabled. Same timing caveat
-    /// as AutoPillion.SyncIntegrations: TweakBase.EnableTweak() only flips Enabled
-    /// to true AFTER Enable() returns, so Enable()/Disable() above pass an explicit
-    /// flag instead of relying on reading Enabled directly. DrawOptions' checkbox
-    /// (called well after EnableTweak() has completed) can read Enabled directly.</summary>
+    /// <summary>Creates/tears down the Chat 2 IPC integration. Takes an explicit
+    /// flag (same reasoning as AutoPillion.SyncIntegrations) since Enabled isn't
+    /// true yet when Enable()/Disable() call this.</summary>
     public void SyncChat2Integration(bool tweakEnabled)
     {
         var want = tweakEnabled && Plugin.Configuration.SearchInfoMenuChat2ContextMenuEnabled;
@@ -137,10 +127,8 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         OpenSearchInfoFor(player);
     }
 
-    /// <summary>Core "open the Search Info window for this player" logic, shared
-    /// by the native right-click menu (OpenSearchInfo above) and the Chat 2 IPC
-    /// integration (SearchInfoChat2Ipc) - both just need a live IPlayerCharacter
-    /// to build native CharacterData from.</summary>
+    /// <summary>Shared by the native right-click menu and SearchInfoChat2Ipc -
+    /// both just need a live IPlayerCharacter.</summary>
     internal void OpenSearchInfoFor(IPlayerCharacter player)
     {
         var agentDetail = AgentDetail.Instance();

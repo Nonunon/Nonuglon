@@ -2,10 +2,8 @@ using System.Numerics;
 
 namespace Nonuglon.Support;
 
-/// <summary>Shared ImGui color constants for status indicators (enabled/disabled/
-/// header/warning), used by both ConfigWindow and each tweak's own DrawOptions() -
-/// centralized so a tweak rendering its own status doesn't drift out of sync with
-/// the window's colors.</summary>
+/// <summary>Shared status-indicator colors for ConfigWindow and tweaks'
+/// DrawOptions(), so status colors don't drift out of sync.</summary>
 public static class UiColors
 {
     public static readonly Vector4 Enabled = new(0.4f, 0.9f, 0.4f, 1f);

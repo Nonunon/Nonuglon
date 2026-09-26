@@ -10,21 +10,11 @@ using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Ported from ffxiv-bundleoftweaks' (https://github.com/Jaksuhn/ffxiv-bundleoftweaks,
-/// BSD-3-Clause-licensed) Tweaks/AutoPillion.cs.
-/// Automatically hops onto a nearby mount with an open pillion seat. Optionally
-/// restricted to a saved list of favorite people via config, populated either
-/// through this tweak's own options UI, the right-click context menu
-/// (AutoPillionContextMenu), or Chat 2's context menu integration
-/// (AutoPillionChat2Ipc).
-///
-/// No TaskManager here on purpose: a single RidePillion call doesn't need a task
-/// queue, and ECommons' TaskManager wait-timeout defaults to ~30s, which made a
-/// missed attempt (dismount, target out of range mid-ride, etc.) lock the tweak up
-/// for way too long. A plain timestamp-based retry throttle is simpler and its
-/// timeout is fully in our control via AutoPillionRetryTimeoutMs.
-/// </summary>
+/// <summary>Ported from ffxiv-bundleoftweaks'
+/// (https://github.com/Jaksuhn/ffxiv-bundleoftweaks, BSD-3-Clause)
+/// Tweaks/AutoPillion.cs. No TaskManager here on purpose: its ~30s wait-timeout
+/// would lock the tweak up way too long on a missed attempt, so this uses a
+/// plain timestamp retry throttle instead (AutoPillionRetryTimeoutMs).</summary>
 public unsafe class AutoPillion : TweakBase
 {
     public override string Name => "Auto Pillion";
@@ -60,14 +50,12 @@ public unsafe class AutoPillion : TweakBase
     private AutoPillionContextMenu? contextMenu;
     private AutoPillionChat2Ipc? chat2Ipc;
 
-    /// <summary>Backing fields for the "add a favorite" name/world text inputs in
-    /// DrawOptions - live on the tweak instance (not static/local) since ImGui
-    /// needs somewhere stable to write into across frames.</summary>
+    // "Add a favorite" input fields for DrawOptions - need to live on the
+    // instance since ImGui needs somewhere stable to write into across frames.
     private string newFavoriteNameInput = string.Empty;
     private string newFavoriteWorldInput = string.Empty;
-    /// <summary>Set by TryAddFavorite when the last Add click failed validation
-    /// (empty field, unknown world, or a duplicate) - drawn as an inline warning
-    /// under the input row until the next successful add or edit.</summary>
+    /// <summary>Set by TryAddFavorite on validation failure; drawn as an inline
+    /// warning until the next successful add.</summary>
     private string? newFavoriteError;
 
     protected override void Enable()
@@ -83,13 +71,9 @@ public unsafe class AutoPillion : TweakBase
         SyncIntegrations(tweakEnabled: false);
     }
 
-    /// <summary>Creates or tears down the context-menu integrations to match the
-    /// current config flags, given whether the tweak itself is (about to be)
-    /// enabled. Takes an explicit flag rather than reading the Enabled property
-    /// directly: TweakBase.EnableTweak() only flips Enabled to true AFTER Enable()
-    /// returns, so reading Enabled from inside Enable() itself would still see
-    /// false. Everywhere else (DrawOptions' checkboxes, called well after
-    /// EnableTweak() has completed), Enabled is safe to read directly.</summary>
+    /// <summary>Creates/tears down the context-menu integrations to match config.
+    /// Takes an explicit flag rather than reading Enabled directly, since
+    /// EnableTweak() only flips Enabled to true AFTER Enable() returns.</summary>
     public void SyncIntegrations(bool tweakEnabled)
     {
         var config = Plugin.Configuration;
@@ -112,9 +96,7 @@ public unsafe class AutoPillion : TweakBase
             return;
         }
 
-        // Still within the current attempt's window - don't spam RidePillion every
-        // frame while waiting to see if the last attempt lands. Once the window
-        // passes without us getting mounted, this falls through and tries again.
+        // Still waiting on the last attempt - don't spam RidePillion every frame.
         if (attemptExpiresAt != 0 && Environment.TickCount64 < attemptExpiresAt)
             return;
         attemptExpiresAt = 0;
@@ -153,12 +135,8 @@ public unsafe class AutoPillion : TweakBase
         attemptExpiresAt = Environment.TickCount64 + Plugin.Configuration.AutoPillionRetryTimeoutMs;
     }
 
-    /// <summary>Small muted "(?)" next to a checkbox that shows a tooltip on
-    /// hover - standard ImGui idiom for explaining a setting without permanently
-    /// occupying space with a full sentence. warning: true recolors it amber
-    /// instead of the default muted gray, for cases where the setting is on but
-    /// something about it isn't actually working right now (e.g. Chat 2 not being
-    /// loaded while its integration is enabled).</summary>
+    /// <summary>Muted "(?)" tooltip icon; warning: true recolors it amber for a
+    /// setting that's on but not actually working (e.g. Chat 2 not loaded).</summary>
     private static void HelpMarker(string tooltip, bool warning = false)
     {
         ImGui.SameLine();
@@ -242,11 +220,8 @@ public unsafe class AutoPillion : TweakBase
         }
         else
         {
-            // Shown in list order, same as OnUpdate tries them (top = tried
-            // first) - reordering priority means removing and re-adding in the
-            // order you want. Removal is deferred to after the loop instead of
-            // RemoveAt-ing mid-iteration, so indices don't shift out from under
-            // the rows still to be drawn.
+            // List order = try order (reorder by removing/re-adding). Removal
+            // deferred past the loop so indices don't shift mid-iteration.
             var removeIndex = -1;
             for (var i = 0; i < config.AutoPillionFavorites.Count; i++)
             {
@@ -290,12 +265,9 @@ public unsafe class AutoPillion : TweakBase
             ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
     }
 
-    /// <summary>Validates and adds a favorite from the two input fields above -
-    /// both must be non-empty, the world must resolve against the real World Excel
-    /// sheet (via WorldLookup, so a typo doesn't silently save a favorite that can
-    /// never match anyone), and the resulting name+world pair must not already be
-    /// saved. Sets newFavoriteError on failure instead of throwing/logging, since
-    /// this is a plain user-input mistake, not an exceptional condition.</summary>
+    /// <summary>Validates and adds a favorite from the input fields above; the
+    /// world must resolve via WorldLookup so a typo can't save an unmatchable
+    /// favorite. Sets newFavoriteError rather than throwing/logging.</summary>
     private void TryAddFavorite(Configuration config)
     {
         var name = newFavoriteNameInput.Trim();
@@ -329,10 +301,8 @@ public unsafe class AutoPillion : TweakBase
 
     public override void HandleCommand(string[] args)
     {
-        // Every subcommand below only exists once the tweak itself is on - while
-        // it's off, this falls straight through to the plain on/off/toggle usage
-        // error at the bottom, exactly as if none of these words were ever valid
-        // here.
+        // Every subcommand below only exists once the tweak is on; otherwise
+        // falls through to the plain toggle usage error.
         if (!Enabled || args.Length == 0) { base.HandleCommand(args); return; }
 
         switch (args[0].ToLowerInvariant())
@@ -406,11 +376,9 @@ public unsafe class AutoPillion : TweakBase
         }
     }
 
-    /// <summary>Handles "/Nonuglon autopillion target add|remove|list|clear". A
-    /// small dispatcher rather than folding this into HandleCommand's switch, since
-    /// managing a list needs more sub-verbs than the plain on/off toggles
-    /// elsewhere in that switch. add/remove take "name@world" now that favorites
-    /// are world-aware - see TryParseNameAtWorld below.</summary>
+    /// <summary>Handles "target add|remove|enable|disable|list|clear" - a
+    /// separate dispatcher since managing a list needs more verbs than a plain
+    /// toggle. add/remove take "name@world" - see TryParseNameAtWorld.</summary>
     private void HandleTargetCommand(string[] args)
     {
         var favorites = Plugin.Configuration.AutoPillionFavorites;

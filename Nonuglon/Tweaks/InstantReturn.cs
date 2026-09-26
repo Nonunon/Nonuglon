@@ -14,22 +14,13 @@ using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Ported from ffxiv-bundleoftweaks' (https://github.com/Jaksuhn/ffxiv-bundleoftweaks,
-/// BSD-3-Clause-licensed) Tweaks/InstantReturn.cs.
-///
-/// The original used a custom [AddressHook&lt;T&gt;] attribute + source generator to
-/// wire up the hook. We're not vendoring that toolchain, so this hooks
-/// AgentReturn.Return directly via its already-resolved MemberFunctionPointers
-/// address instead - confirmed to generate identical code to what the real
-/// generator produces.
-///
-/// The direct teleport is fired via GameMain.ExecuteCommand(214) - see
-/// Support/GameCommandIds.cs. The SelectYesno auto-click listener is NOT
-/// redundant with that - it's what handles the case where Original(agent) still
-/// opens the real confirmation dialog (general action not instantly ready), which
-/// the original design expects and clicks through.
-/// </summary>
+/// <summary>Ported from ffxiv-bundleoftweaks'
+/// (https://github.com/Jaksuhn/ffxiv-bundleoftweaks, BSD-3-Clause)
+/// Tweaks/InstantReturn.cs, hooking AgentReturn.Return directly via
+/// MemberFunctionPointers instead of vendoring its attribute+generator
+/// toolchain. The SelectYesno listener isn't redundant with the direct command
+/// fire - it clicks through the real confirmation dialog Original(agent) still
+/// opens when the general action isn't instantly ready.</summary>
 public unsafe class InstantReturn : TweakBase
 {
     public override string Name => "Quick Return";
@@ -91,9 +82,7 @@ public unsafe class InstantReturn : TweakBase
 
     public override void HandleCommand(string[] args)
     {
-        // Only recognized while the tweak is on - disabled, this falls straight
-        // through to the plain on/off/toggle usage error below, exactly as if
-        // "leaveparty" were never a valid word here.
+        // Only recognized while on; otherwise falls through to the plain toggle.
         if (Enabled && args.Length >= 1 && args[0].Equals("leaveparty", StringComparison.OrdinalIgnoreCase))
         {
             if (args.Length < 2 || !ResolveBool(args[1], Plugin.Configuration.InstantReturnLeaveParty, out var leaveParty))
@@ -114,10 +103,9 @@ public unsafe class InstantReturn : TweakBase
 
     private void ReturnDetour(AgentReturn* agent)
     {
-        // Deliberately NOT an if/else, and no early return: the original tweak calls
-        // Original(agent) as a side effect when the general action reads as unavailable
-        // (which opens the real confirmation dialog - HandleSelectYesno below clicks
-        // it through), but ALWAYS fires the direct command regardless of that check.
+        // Not an if/else: Original(agent) still fires (opens the confirmation
+        // dialog HandleSelectYesno clicks through) when unavailable, but the
+        // direct command below always fires regardless.
         if (ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, ReturnGeneralActionId) != 0)
             returnHook!.Original(agent);
 
@@ -135,11 +123,8 @@ public unsafe class InstantReturn : TweakBase
             return;
         }
 
-        // Matches the original's WaitUntil(Disband/Leave) exactly: call the
-        // disband/leave function itself every tick until IT returns true, rather
-        // than calling it once and separately polling party membership. If the
-        // first call fails (not ready, rate limited, whatever), this keeps retrying
-        // instead of silently giving up.
+        // Calls disband/leave every tick until it returns true, rather than
+        // once + polling membership separately, so a failed first call retries.
         if (InfoProxyCrossRealm.IsLocalPlayerPartyLeader())
             taskManager.Enqueue(() => InfoProxyPartyMember.Instance()->DisbandParty(), "InstantReturn: wait for disband");
         else

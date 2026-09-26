@@ -1,17 +1,13 @@
 name: Release Nonuglon
 
-# Triggered by pushing a version tag, e.g.:
-#   git tag v1.0.0
-#   git push origin v1.0.0
+# Triggered by pushing a version tag: git tag v1.0.0 && git push origin v1.0.0
 #
-# Builds Release, zips it, publishes a GitHub Release with that zip attached as
-# "Nonuglon.zip" (a fixed name, so repo.json's DownloadLink* URLs - which point at
-# .../releases/latest/download/Nonuglon.zip - never need to change), then syncs
-# repo.json's AssemblyVersion/DalamudApiLevel from the build's own generated
-# manifest AND Nonuglon.csproj's <Version> to match the tag, committing both back
-# to master. Description/Punchline/Tags in repo.json, and <Description> in the
-# csproj, are hand-curated presentation text, not touched here on purpose - they
-# don't need to match each other or the tag.
+# Builds Release, zips it as "Nonuglon.zip" (fixed name, so repo.json's
+# .../releases/latest/download/Nonuglon.zip links never change), then syncs
+# repo.json's AssemblyVersion/DalamudApiLevel and the csproj's <Version> to
+# match, committing both back to master. Presentation text (repo.json's
+# Description/Punchline/Tags, the csproj's <Description>) is hand-curated and
+# deliberately not touched here.
 
 on:
   push:
@@ -60,15 +56,9 @@ jobs:
       - name: Sync repo.json from the built manifest
         shell: pwsh
         run: |
-          # Only the fields that must technically match the real build (version and
-          # API compatibility) are synced here. Description/Punchline/Tags are
-          # repo.json's own presentation text - edit those by hand, they're
-          # intentionally left alone.
-          # @(...) forces array semantics on the way in, and -InputObject (not a
-          # pipe) on the way out, since piping a single-element array into
-          # ConvertTo-Json unwraps it and re-serializes as a bare {...} object
-          # instead of a [...] array - which is exactly what broke repo.json after
-          # the v0.0.1 release (Dalamud's installer requires a JSON array here).
+          # @(...) in and -InputObject (not a pipe) out: piping a single-element
+          # array into ConvertTo-Json unwraps it into a bare {...} object instead
+          # of [...] - what broke repo.json after v0.0.1 (Dalamud needs an array).
           $manifest = Get-Content build_output\Nonuglon.json -Raw | ConvertFrom-Json
           $repo = @(Get-Content repo.json -Raw | ConvertFrom-Json)
           $entry = $repo[0]
@@ -79,10 +69,7 @@ jobs:
       - name: Sync Nonuglon.csproj's checked-in <Version>
         shell: pwsh
         run: |
-          # Purely cosmetic (the build above already stamped the real
-          # AssemblyVersion via -p:Version=), but keeps a plain local
-          # `dotnet build`/Build_Nonuglon.bat from showing a stale version number
-          # in the Dev Plugins panel between releases.
+          # Cosmetic - keeps local dev builds from showing a stale version.
           $csprojPath = "Nonuglon\Nonuglon.csproj"
           $csproj = Get-Content $csprojPath -Raw
           $csproj = $csproj -replace '<Version>[^<]*</Version>', '<Version>${{ steps.version.outputs.version }}</Version>'

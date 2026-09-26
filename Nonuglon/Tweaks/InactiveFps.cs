@@ -6,25 +6,12 @@ using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Mini-tweak (see IMiniTweak.cs / Commands.cs) wrapping the game's own System
-/// Configuration option
+/// <summary>Mini-tweak wrapping the game's System Configuration option
 /// (https://dalamud.dev/api/Dalamud.Game.Config/Enums/SystemConfigOption/#fpsinactive)
-/// - "Limit frame rate when client is inactive.". Its own Enabled flag is kept
-/// separate from Commands' master switch: both need to be true (see
-/// EffectivelyEnabled) before the "limit" subcommand or checkbox actually
-/// touches the live game setting, so checking this alone (with Commands off) or
-/// Commands alone (with this unchecked) is inert by design - the checkbox itself
-/// stays togglable either way, only the *effect* is gated.
-///
-/// Sets via the uint overload (0u/1u) rather than the bool overload: reading
-/// Dalamud's own GameConfigSection source, the uint/float/string setters marshal
-/// onto the framework thread (RunOnFrameworkThread) but the bool overload
-/// doesn't. Both HandleCommand and DrawRow here already run on the framework
-/// thread in Dalamud's normal execution model, so this isn't fixing a live bug -
-/// it's cheap insurance against that asymmetry ever mattering if this code is
-/// ever called from somewhere that isn't.
-/// </summary>
+/// - "Limit frame rate when client is inactive.". Sets via the uint overload
+/// (0u/1u): Dalamud's uint/float/string setters marshal onto the framework
+/// thread but the bool overload doesn't, so this is cheap insurance in case
+/// this is ever called from somewhere that isn't already on it.</summary>
 public class InactiveFps : IMiniTweak
 {
     public string Name => "Inactive Window FPS Throttle";
@@ -38,17 +25,14 @@ public class InactiveFps : IMiniTweak
 
     public string CommandName => "inactivefps";
 
-    // "limit" only shows up (and only works, see HandleCommand below) once
-    // EffectivelyEnabled - while off there's nothing beyond the plain
-    // on/off/toggle to advertise.
+    // "limit" only shows up once EffectivelyEnabled - see HandleCommand below.
     public string[] UsageLines =>
         EffectivelyEnabled
             ? [$"/Nonuglon {CommandName} <on|off|toggle>", $"/Nonuglon {CommandName} limit <on|off|toggle>"]
             : [$"/Nonuglon {CommandName} <on|off|toggle>"];
 
-    /// <summary>True only when both this mini-tweak AND Commands itself (the
-    /// master switch) are on - the actual gate the "limit" subcommand and
-    /// checkbox check before touching the live game setting.</summary>
+    /// <summary>True only when both this and Commands are on - the actual gate
+    /// before touching the live game setting.</summary>
     private static bool EffectivelyEnabled => Plugin.Configuration.CommandsEnabled && Plugin.Configuration.InactiveFpsEnabled;
 
     private static bool TryGetLimit(out bool value) => Svc.GameConfig.TryGet(SystemConfigOption.FPSInActive, out value);
@@ -82,11 +66,7 @@ public class InactiveFps : IMiniTweak
 
     public void HandleCommand(string[] args)
     {
-        // "limit" is only recognized as a subcommand at all once both this
-        // mini-tweak and Commands are on - while disabled it falls straight
-        // through to the plain on/off/toggle usage error below, exactly as if
-        // "limit" were never a valid word here, rather than hinting that it
-        // exists but needs something enabled first.
+        // Only recognized once EffectivelyEnabled; otherwise falls through.
         if (EffectivelyEnabled && args.Length >= 1 && args[0].Equals("limit", StringComparison.OrdinalIgnoreCase))
         {
             if (!TryGetLimit(out var current) || args.Length < 2 || !ResolveBool(args[1], current, out var enabled))

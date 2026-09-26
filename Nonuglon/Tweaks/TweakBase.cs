@@ -4,45 +4,33 @@ using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Minimal base class for a self-contained tweak: something with its own on/off switch
-/// that hooks itself into the game and cleans up after itself.
-///
-/// Deliberately much lighter than ffxiv-bundleoftweaks' Tweak&lt;T&gt; system - no
-/// reflection-driven config UI, no IPC requirement graph, no attribute-based hook
-/// generation. Just enough plumbing to host a handful of hand-ported tweaks.
-/// </summary>
+/// <summary>Minimal base for a self-contained tweak: its own on/off switch,
+/// hooks itself into the game, cleans up after itself. Deliberately lighter
+/// than ffxiv-bundleoftweaks' Tweak&lt;T&gt; system - no reflection-driven
+/// config UI, no attribute-based hook generation.</summary>
 public abstract class TweakBase : IDisposable
 {
     public abstract string Name { get; }
     public abstract string Description { get; }
     public bool Enabled { get; private set; }
 
-    /// <summary>The persisted on/off flag for this tweak, backed by its own
-    /// Configuration property. Owning this here - instead of Plugin.cs and
-    /// ConfigWindow.cs each separately knowing which Configuration field belongs to
-    /// which tweak - is what lets EnableTweaksFromConfig, ConfigWindow's checkbox,
-    /// and HandleCommand below all share one code path instead of three
-    /// hand-synced ones.</summary>
+    /// <summary>Persisted on/off flag, backed by its own Configuration property.
+    /// Owning it here (not in Plugin.cs/ConfigWindow.cs) is what lets
+    /// EnableTweak, the config checkbox, and HandleCommand share one code path.</summary>
     public abstract bool ConfigEnabled { get; set; }
 
-    /// <summary>Chat command names (e.g. "searchinfo") that route "/Nonuglon &lt;name&gt; ..."
-    /// to this tweak's HandleCommand, checked case-insensitively. The first entry is
-    /// the canonical name used in generated usage text; any others are aliases.
-    /// Empty by default - a tweak with no entries here can still be toggled from the
-    /// config window, just not from chat.</summary>
+    /// <summary>Chat command names routing "/Nonuglon &lt;name&gt; ..." to
+    /// HandleCommand; first entry is canonical, rest are aliases. Empty by
+    /// default - still toggleable from the config window, just not chat.</summary>
     public virtual string[] CommandNames => [];
 
-    /// <summary>Usage line(s) for this tweak shown by "/Nonuglon help", generated
-    /// from CommandNames by default. Override alongside HandleCommand to document
-    /// any extra subcommands - see AutoPillion/InstantReturn.</summary>
+    /// <summary>Usage line(s) shown by "/Nonuglon help". Override alongside
+    /// HandleCommand to document extra subcommands - see AutoPillion.</summary>
     public virtual string[] UsageLines => CommandNames.Length == 0 ? [] : [$"/Nonuglon {CommandNames[0]} <on|off|toggle>"];
 
-    /// <summary>Handles "/Nonuglon &lt;CommandNames[n]&gt; ..." for this tweak - args
-    /// excludes the command name itself, so args[0] is whatever came right after it
-    /// (if anything). Default implementation is a plain on/off/toggle switch over
-    /// ConfigEnabled; override to add extra subcommands, falling back to
-    /// base.HandleCommand(args) for the plain toggle case.</summary>
+    /// <summary>Handles "/Nonuglon &lt;name&gt; ..." - args excludes the command
+    /// name itself. Default is a plain on/off/toggle over ConfigEnabled;
+    /// override for extra subcommands, falling back to base.HandleCommand.</summary>
     public virtual void HandleCommand(string[] args)
     {
         if (args.Length == 0 || !ResolveBool(args[0], ConfigEnabled, out var enabled))
@@ -97,18 +85,14 @@ public abstract class TweakBase : IDisposable
     protected abstract void Enable();
     protected abstract void Disable();
 
-    /// <summary>Draws this tweak's extra options (if any) in the config window,
-    /// indented under its enable checkbox. Default no-op - tweaks with nothing
-    /// beyond the on/off switch don't need to override this. Colocating each
-    /// tweak's own options UI here (instead of hardcoding it in ConfigWindow) means
-    /// adding a new tweak never requires touching ConfigWindow.cs.</summary>
+    /// <summary>Draws this tweak's extra options in the config window, indented
+    /// under its checkbox. Default no-op; keeps ConfigWindow.cs tweak-agnostic.</summary>
     public virtual void DrawOptions() { }
 
-    /// <summary>True when this tweak is enabled but not actually functioning as
-    /// expected right now - e.g. a required companion plugin isn't loaded. Drives a
-    /// distinct warning color on the status dot, separate from plain on/off.
-    /// Default false; only override this if the tweak has some external
-    /// dependency that can silently make "enabled" not mean "working".</summary>
+    /// <summary>True when enabled but not actually working (e.g. a required
+    /// companion plugin isn't loaded) - drives a warning-colored status dot.
+    /// Note: Enable() must not throw on the condition this checks, or Enabled
+    /// stays false and this becomes unreachable (see EstateTeleportation.cs).</summary>
     public virtual bool HasWarning => false;
 
     public virtual void Dispose() => DisableTweak();

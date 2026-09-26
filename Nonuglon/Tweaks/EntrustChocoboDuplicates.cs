@@ -16,12 +16,10 @@ using static ECommons.UIHelpers.AddonMasterImplementations.AddonMaster;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Ported from PandorasBox's (https://github.com/PunishXIV/PandorasBox,
-/// BSD-3-Clause-licensed) Features/UI/EntrustChocoboDuplicatesAB.cs.
-/// Re-hosted on TweakBase instead of PandorasBox's Feature/Overlays window system -
-/// draws directly off UiBuilder.Draw instead of going through P.Ws.
-/// </summary>
+/// <summary>Ported from PandorasBox's
+/// (https://github.com/PunishXIV/PandorasBox, BSD-3-Clause)
+/// Features/UI/EntrustChocoboDuplicatesAB.cs, re-hosted on TweakBase (draws off
+/// UiBuilder.Draw directly) instead of PandorasBox's own window system.</summary>
 public unsafe class EntrustChocoboDuplicates : TweakBase
 {
     public override string Name => "Saddlebag Duplicates";

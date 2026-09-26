@@ -7,21 +7,16 @@ using Lumina.Excel.Sheets;
 
 namespace Nonuglon.Support;
 
-/// <summary>
-/// Ported from ffxiv-bundleoftweaks' clib submodule (clib.Extensions.IGameObjectExtensions)
-/// since we're not vendoring all of clib just for these couple of helpers.
-/// </summary>
+/// <summary>Ported from ffxiv-bundleoftweaks' clib
+/// (clib.Extensions.IGameObjectExtensions), not vendoring all of clib for just
+/// these helpers.</summary>
 public static unsafe class GameObjectPillionExtensions
 {
     public static Character* Character(this IGameObject obj) => (Character*)obj.Address;
     public static BattleChara* BattleChara(this IGameObject obj) => (BattleChara*)obj.Address;
 
-    /// <summary>
-    /// True whether this object is riding as the mount's driver OR as a pillion
-    /// passenger. ConditionFlag.Mounted (Dalamud's usual "am I mounted" check) only
-    /// reflects being the driver, so it never flips for a passenger - reading the
-    /// Mount struct's MountId directly works for both.
-    /// </summary>
+    /// <summary>True for both mount driver and pillion passenger - unlike
+    /// ConditionFlag.Mounted, which only reflects being the driver.</summary>
     public static bool IsMounted(this IGameObject? obj) => obj != null && obj.Character()->Mount.MountId != 0;
 
     public static bool CanRidePillion(this IGameObject? obj)
@@ -32,12 +27,9 @@ public static unsafe class GameObjectPillionExtensions
         return mount.MountedEntityIds[1..].ToArray().Count(x => x != 0) < extraSeats;
     }
 
-    /// <summary>Every player-visible object matching both name AND home world, used
-    /// as a lightweight stand-in for clib's IObjectTable.PlayerObjects. Checking
-    /// world alongside name (the original ffxiv-bundleoftweaks tweak only checked
-    /// name) avoids offering a ride to the wrong person when two players share a
-    /// name on different worlds - not rare in cross-world duty/party finder
-    /// content.</summary>
+    /// <summary>Matches name AND home world (the original tweak only checked
+    /// name), to avoid offering a ride to the wrong same-named player in
+    /// cross-world content.</summary>
     public static IGameObject? FindPlayerByNameAndWorld(string name, uint worldId) =>
         Svc.Objects.FirstOrDefault(o =>
             o.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc &&

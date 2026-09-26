@@ -7,21 +7,16 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "Add as Auto Pillion favorite" to the right-click context menu on
-/// players in the party list, friend list, chat log, and similar windows. Ported
-/// from HuntTrainAssistant's (https://github.com/NightmareXIV/HuntTrainAssistant -
-/// a Dalamud plugin, so bound by Dalamud's own AGPL-3.0 regardless of its lack of a
-/// standalone LICENSE file) ContextMenuManager.cs - same OnMenuOpened/AddMenuItem
-/// pattern Dalamud's context-menu API itself dictates, trimmed down to just adding
-/// a favorite name rather than their cross-world hunt-train conductor assignment
-/// (we don't need the homeworld/public-world checks that exist there for
-/// cross-world lookups - Auto Pillion only ever cares about someone physically near
-/// you).</summary>
+/// <summary>Adds "Add as Auto Pillion favorite" to the right-click menu on the
+/// party list, friend list, chat log, etc. Ported from HuntTrainAssistant's
+/// (https://github.com/NightmareXIV/HuntTrainAssistant - a Dalamud plugin, so
+/// bound by Dalamud's own AGPL-3.0 regardless of its lack of a LICENSE file)
+/// ContextMenuManager.cs, trimmed to a favorite name instead of their cross-world
+/// conductor assignment - Auto Pillion only cares about someone physically
+/// near you.</summary>
 public class AutoPillionContextMenu : IDisposable
 {
-    // Addons where a right-click-a-player context menu makes sense. Trimmed from
-    // HuntTrainAssistant's own (larger) list to the ones relevant here. null covers
-    // the default nameplate/target context menu.
+    // Addons where a right-click-player menu makes sense; null = default nameplate/target menu.
     private static readonly string?[] ValidAddons =
     [
         null,
@@ -56,12 +51,8 @@ public class AutoPillionContextMenu : IDisposable
         if (!ValidAddons.Contains(args.AddonName)) return;
         if (args.Target is not MenuTargetDefault target || string.IsNullOrEmpty(target.TargetName)) return;
 
-        // TargetObject is only populated when the game object is actually
-        // nearby/rendered (e.g. nameplate/target context menu) - friend list,
-        // party list, etc. right-clicks are always players anyway and won't have
-        // a TargetObject, so only filter when we actually have one to check.
-        // Excludes NPCs, mobs, minions, and other non-player objects from getting
-        // the menu item in the first place.
+        // TargetObject is only populated for a live rendered object (nameplate
+        // menus) - excludes NPCs/mobs when present, filtered out entirely.
         if (target.TargetObject is { } obj && obj.ObjectKind != ObjectKind.Pc) return;
 
         args.AddMenuItem(menuItem);
@@ -71,8 +62,7 @@ public class AutoPillionContextMenu : IDisposable
     {
         if (args.Target is not MenuTargetDefault target || string.IsNullOrEmpty(target.TargetName)) return;
 
-        // 0 means the target isn't a real player-on-a-world (e.g. an NPC that
-        // still passed the ValidAddons/name checks above) - nothing sane to save.
+        // 0 means not a real player-on-a-world (e.g. an NPC past the checks above).
         var worldId = target.TargetHomeWorld.RowId;
         if (worldId == 0) return;
 

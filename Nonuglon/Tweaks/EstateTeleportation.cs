@@ -11,29 +11,19 @@ using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>
-/// Adapted from XA-Slave's Services/EstateTeleportationContextMenuService.cs
-/// (https://github.com/xa-io/XA-Slave, AGPL-3.0-licensed) - the generation-guarded
-/// menu/click lifecycle and the friend-list resolution logic are carried over
-/// essentially as-is, since that's what makes it safe to fire a delayed native call
-/// against a menu target that's no longer valid; the surrounding object model is
-/// rebuilt on TweakBase/Svc rather than XA-Slave's own constructor-injected services.
+/// <summary>Adapted from XA-Slave's
+/// Services/EstateTeleportationContextMenuService.cs
+/// (https://github.com/xa-io/XA-Slave, AGPL-3.0) - the generation-guarded
+/// menu/click lifecycle and friend-list resolution are carried over as-is
+/// (that's what makes a delayed native call against a stale menu target safe);
+/// the surrounding object model is rebuilt on TweakBase/Svc.
 ///
-/// Adds "Estate Teleportation" to the right-click context menu on a friend who
-/// shares your current world, opening the game's own friend estate-teleport
-/// selector for them directly (AgentFriendlist.OpenFriendEstateTeleportation) - the
-/// same window the Friend List's own entry uses, just reachable from more places
-/// (party list, chat log, etc).
-///
-/// The native menu already offers this itself whenever the target is a live,
-/// rendered character (right-clicking their nameplate/model out in the world,
-/// or in the Friend List where the entry is always present) - the opposite gap
-/// from Search Info Menu, which is native on menu-only targets but missing in
-/// world space. So this only adds the item when MenuTargetDefault.TargetObject is
-/// null - i.e. exactly the cases (party list, chat log, etc.) where the game
-/// doesn't already show it - instead of duplicating a menu entry the game already
-/// draws itself.
-/// </summary>
+/// Opens the game's own friend estate-teleport window
+/// (AgentFriendlist.OpenFriendEstateTeleportation), reachable from more places
+/// than just the Friend List. Only adds the menu item when
+/// MenuTargetDefault.TargetObject is null - the opposite gap from Search Info
+/// Menu - since the native menu already shows this itself for any live,
+/// rendered character.</summary>
 public sealed unsafe class EstateTeleportation : TweakBase
 {
     public override string Name => "Estate Teleportation";
@@ -47,30 +37,19 @@ public sealed unsafe class EstateTeleportation : TweakBase
 
     public override string[] CommandNames => ["estateteleport", "estate"];
 
-    /// <summary>Bumped on logout or territory change, and captured alongside each
-    /// menu click. A click whose generation no longer matches the current one means
-    /// the world (or character) changed out from under it since the menu was
-    /// opened, so OpenEstate below drops it instead of teleporting into a stale
-    /// context.</summary>
+    /// <summary>Bumped on logout/territory change, captured per menu click - a
+    /// stale generation means the world changed since the menu opened, so
+    /// OpenEstate drops it instead of teleporting into a stale context.</summary>
     private uint generation;
 
-    /// <summary>Last failure message shown in chat via OpenEstate, or null if the
-    /// most recent attempt succeeded (or none has happened yet). Suppresses
-    /// repeat chat spam for the *same* failure - clicking a stale menu item
-    /// again and again shouldn't reprint the same line every time - while a
-    /// genuinely different failure, or a subsequent success, is free to show
-    /// again immediately.</summary>
+    /// <summary>Last failure shown in chat, or null after a success - see
+    /// ReportFailure. Avoids reprinting the same failure on repeat clicks.</summary>
     private string? lastReportedFailure;
 
     protected override void Enable()
     {
-        // Deliberately does NOT throw when the native function can't be
-        // resolved: OnMenuOpened/OpenEstate below already independently guard
-        // against that (the menu item still gets added, but clicking it just
-        // logs/reports a failure instead of crashing). Enabled needs to stay
-        // true in that case for HasWarning below to actually be reachable -
-        // EnableTweak() catches a throw here by leaving Enabled false, which
-        // would make "Enabled && (native fn missing)" permanently false.
+        // Doesn't throw when the native function is missing - see HasWarning's
+        // doc comment in TweakBase.cs for why that matters here.
         generation++;
         Svc.ContextMenu.OnMenuOpened += OnMenuOpened;
         Svc.ClientState.Logout += OnLogout;
@@ -109,21 +88,16 @@ public sealed unsafe class EstateTeleportation : TweakBase
 
     private void OnMenuOpened(IMenuOpenedArgs args)
     {
-        // TargetObject is populated whenever the target is a live, rendered
-        // character - nameplate/model right-clicks out in the world - and the game
-        // already shows its own Estate Teleportation entry there, so skip adding
-        // ours to avoid a duplicate. Friend List is excluded outright for the same
-        // reason: it always carries the native entry regardless of whether the
-        // friend happens to be rendered nearby right now.
+        // TargetObject non-null means a live rendered character, where the game
+        // already shows this natively - skip to avoid a duplicate. Friend List
+        // is excluded outright since it always carries the native entry.
         if (!IsReady() || args.MenuType != ContextMenuType.Default || args.AddonName == "FriendList"
             || args.Target is not MenuTargetDefault { TargetObject: null } target)
             return;
 
         try
         {
-            // Never retain MenuTargetDefault itself - its properties read mutable
-            // native menu state, so only the plain values below survive past this
-            // callback.
+            // Don't retain MenuTargetDefault itself - it reads mutable native state.
             var name = target.TargetName;
             var world = target.TargetHomeWorld.RowId;
             var contentId = ResolveFriend(target.TargetContentId, name, world);
@@ -145,12 +119,10 @@ public sealed unsafe class EstateTeleportation : TweakBase
         }
     }
 
-    /// <summary>Matches a context-menu target against the live friend list by name
-    /// and home world (only friends sharing your current world are eligible - that's
-    /// what OpenFriendEstateTeleportation expects), falling back to an exact
-    /// content-ID match when the menu already supplied one. Returns 0 for "not a
-    /// usable friend" rather than throwing, since a stranger simply having the same
-    /// name as a friend is an expected, non-exceptional case here.</summary>
+    /// <summary>Matches against the live friend list by name+world (only
+    /// same-world friends are eligible), falling back to content ID if the menu
+    /// supplied one. Returns 0 rather than throwing - a name collision with a
+    /// stranger is expected here, not exceptional.</summary>
     private static ulong ResolveFriend(ulong contentId, string name, uint world)
     {
         var local = Svc.Objects.LocalPlayer;
@@ -172,9 +144,7 @@ public sealed unsafe class EstateTeleportation : TweakBase
                 || (contentId != 0 && friend.ContentId != contentId))
                 continue;
 
-            // A menu with no content ID (name+world only) must match exactly one
-            // friend - two same-named friends on the same world is a coin flip we'd
-            // rather refuse than guess wrong on.
+            // Name+world alone must match exactly one friend - refuse rather than guess.
             if (match != 0) return 0;
             match = friend.ContentId;
         }
