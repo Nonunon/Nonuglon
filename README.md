@@ -14,7 +14,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Auto Pillion** - automatically hops onto a nearby mount with an open pillion seat. Can be restricted to a list of "favorite" people, via chat command, the config, or a "Add to Auto Pillion" entry (native context menu and/or Chat 2's). Also ported from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks).
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
-- **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a friend in your party list who shares your current world, opening estate-teleport window for them directly.
+- **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a player from menus such as the party list, chat log, free company, or linkshells (but not the friend list itself) when they are on your friend list and their home world is your current world, opening the estate-teleport window for them directly.
 - **Commands** - a grab-bag of tiny single-setting "mini-tweaks".
   - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
   - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
@@ -79,7 +79,7 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon rendertoggle now <on|off|toggle>         flips 3D rendering; needs Commands AND this on
 /rendertoggle <on|off|toggle>                      same as /Nonuglon rendertoggle - a shorter standalone alias
 /rendertoggle now <on|off|toggle>
-/rendertoggle                                      no arguments: flips 3D rendering directly (mini-tweak must already be on)
+/rendertoggle                                      no arguments: flips 3D rendering directly (Commands and the mini-tweak must both already be on)
 ```
 
 </details>

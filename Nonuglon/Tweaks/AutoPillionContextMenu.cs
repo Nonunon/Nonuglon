@@ -66,16 +66,7 @@ public class AutoPillionContextMenu : IDisposable
         var worldId = target.TargetHomeWorld.RowId;
         if (worldId == 0) return;
 
-        var favorites = Plugin.Configuration.AutoPillionFavorites;
-        if (favorites.Any(f => f.Name == target.TargetName && f.WorldId == worldId)) return;
-
-        favorites.Add(new AutoPillionFavorite
-        {
-            Name = target.TargetName,
-            WorldId = worldId,
-            WorldName = target.TargetHomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty
-        });
-        Plugin.Configuration.Save();
+        AutoPillion.AddFavorite(target.TargetName, worldId);
     }
 
     public void Dispose() => Svc.ContextMenu.OnMenuOpened -= OnMenuOpened;

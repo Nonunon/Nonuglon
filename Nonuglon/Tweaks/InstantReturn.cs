@@ -117,6 +117,10 @@ public unsafe class InstantReturn : TweakBase
 
     private void StartLeaveThenReturn()
     {
+        // A chain is already in flight (pressing Return again while still
+        // leaving the party); don't queue a second one behind it.
+        if (taskManager.IsBusy) return;
+
         if (!InfoProxyCrossRealm.IsLocalPlayerInParty())
         {
             FireReturnCommand();
@@ -143,7 +147,7 @@ public unsafe class InstantReturn : TweakBase
     private void HandleSelectYesno(AddonEvent type, AddonArgs args)
     {
         var agent = AgentModule.Instance()->GetAgentByInternalId(AgentId.Return);
-        if (agent is null || agent->AddonId != args.Addon.Id) return;
+        if (agent is null || !agent->IsAgentActive() || agent->AddonId != args.Addon.Id) return;
 
         args.ReceiveEvent(AtkEventType.ButtonClick, 0);
     }

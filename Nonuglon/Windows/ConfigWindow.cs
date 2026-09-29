@@ -13,7 +13,6 @@ public class ConfigWindow : Window, IDisposable
     private const float MinSidebarWidth = 90f;
     private const float MaxSidebarWidth = 260f;
 
-    private readonly Configuration configuration;
     private readonly Plugin plugin;
     private int selectedIndex;
     private float sidebarWidth = 150f;
@@ -26,7 +25,6 @@ public class ConfigWindow : Window, IDisposable
         SizeCondition = ImGuiCond.FirstUseEver;
 
         this.plugin = plugin;
-        configuration = Plugin.Configuration;
     }
 
     public void Dispose() { }
@@ -109,11 +107,7 @@ public class ConfigWindow : Window, IDisposable
         var enabled = tweak.Enabled;
         if (ImGui.Checkbox($"Enabled##{tweak.GetType().Name}", ref enabled))
         {
-            if (enabled) tweak.EnableTweak();
-            else tweak.DisableTweak();
-
-            tweak.ConfigEnabled = enabled;
-            configuration.Save();
+            tweak.SetEnabled(enabled);
         }
 
         ImGui.SameLine();

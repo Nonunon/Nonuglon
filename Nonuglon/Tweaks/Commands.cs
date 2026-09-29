@@ -29,7 +29,12 @@ public class Commands : TweakBase
 
     // Nothing to hook; mini-tweaks check Plugin.Configuration.CommandsEnabled directly.
     protected override void Enable() { }
-    protected override void Disable() { }
+
+    protected override void Disable()
+    {
+        foreach (var mini in miniTweaks)
+            mini.OnMasterDisabled();
+    }
 
     public override string[] UsageLines =>
     [

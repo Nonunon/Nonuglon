@@ -37,9 +37,13 @@ public class RenderToggle : IMiniTweak
     public string CommandName => "rendertoggle";
 
     public string[] UsageLines =>
-        Enabled
+        EffectivelyEnabled
             ? [$"/Nonuglon {CommandName} <on|off|toggle>", $"/Nonuglon {CommandName} now <on|off|toggle>"]
             : [$"/Nonuglon {CommandName} <on|off|toggle>"];
+
+    /// <summary>True only when both this and Commands are on - the gate before
+    /// touching the render state.</summary>
+    private static bool EffectivelyEnabled => Plugin.Configuration.CommandsEnabled && Plugin.Configuration.RenderToggleEnabled;
 
     private bool disabled;
     private IDtrBarEntry? dtrEntry;
@@ -80,7 +84,7 @@ public class RenderToggle : IMiniTweak
     /// <summary>Bare "/rendertoggle"; swallowed while the mini-tweak is off.</summary>
     public void ToggleAction()
     {
-        if (!Enabled) return;
+        if (!EffectivelyEnabled) return;
         SetRenderDisabled(!disabled);
     }
 
@@ -96,7 +100,7 @@ public class RenderToggle : IMiniTweak
             ImGui.SetTooltip(Description);
 
         ImGui.Indent();
-        ImGui.BeginDisabled(!Enabled);
+        ImGui.BeginDisabled(!EffectivelyEnabled);
 
         var disabledLocal = disabled;
         if (ImGui.Checkbox("3D rendering disabled##RenderToggleActive", ref disabledLocal))
@@ -109,7 +113,7 @@ public class RenderToggle : IMiniTweak
     public void HandleCommand(string[] args)
     {
         // "now" only exists once the mini-tweak is on; otherwise falls through.
-        if (Enabled && args.Length >= 1 && args[0].Equals("now", StringComparison.OrdinalIgnoreCase))
+        if (EffectivelyEnabled && args.Length >= 1 && args[0].Equals("now", StringComparison.OrdinalIgnoreCase))
         {
             if (args.Length < 2 || !ResolveBool(args[1], disabled, out var value))
             {
@@ -132,6 +136,8 @@ public class RenderToggle : IMiniTweak
         Plugin.Configuration.Save();
         ReportStateChange(Name, previous, enabledSelf);
     }
+
+    public void OnMasterDisabled() => SetRenderDisabled(false, announce: false);
 
     public void Dispose()
     {

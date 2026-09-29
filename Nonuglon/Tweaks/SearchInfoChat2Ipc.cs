@@ -17,6 +17,7 @@ public class SearchInfoChat2Ipc : IDisposable
 {
     private readonly SearchInfoMenu owner;
     private string? currentId;
+    private readonly EzIPCDisposalToken[] ipcTokens;
 
     [EzIPC] private Func<string> Register = null!;
     [EzIPC] private Action<string> Unregister = null!;
@@ -24,7 +25,7 @@ public class SearchInfoChat2Ipc : IDisposable
     public SearchInfoChat2Ipc(SearchInfoMenu owner)
     {
         this.owner = owner;
-        EzIPC.Init(this, "ChatTwo", SafeWrapper.AnyException);
+        ipcTokens = EzIPC.Init(this, PluginDetection.Chat2InternalName, SafeWrapper.AnyException);
         Available();
     }
 
@@ -47,5 +48,7 @@ public class SearchInfoChat2Ipc : IDisposable
     public void Dispose()
     {
         if (currentId != null) Unregister(currentId);
+        foreach (var token in ipcTokens)
+            token.Dispose();
     }
 }

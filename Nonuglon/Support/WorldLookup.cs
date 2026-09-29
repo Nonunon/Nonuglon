@@ -27,4 +27,8 @@ public static class WorldLookup
         world = default;
         return false;
     }
+
+    /// <summary>Display name for a world id, or empty if the id is unknown.</summary>
+    public static string GetName(uint worldId) =>
+        Svc.Data.GetExcelSheet<World>().TryGetRow(worldId, out var row) ? row.Name.ExtractText() : string.Empty;
 }

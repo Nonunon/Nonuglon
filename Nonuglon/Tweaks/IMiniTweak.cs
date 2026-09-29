@@ -25,6 +25,10 @@ public interface IMiniTweak
 
     void HandleCommand(string[] args);
 
+    /// <summary>Called when the Commands master switch turns off, for a
+    /// mini-tweak whose effect is live state that must be undone. Default no-op.</summary>
+    void OnMasterDisabled() { }
+
     /// <summary>Called on plugin disposal (see Commands.Dispose) for a
     /// mini-tweak that leaves something live behind Enabled's setter doesn't
     /// already clean up (e.g. RenderToggle's Dtr bar entry). Default no-op.</summary>

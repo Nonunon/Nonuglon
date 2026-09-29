@@ -39,12 +39,23 @@ public abstract class TweakBase : IDisposable
             return;
         }
 
-        var previous = ConfigEnabled;
+        var previous = Enabled;
+        SetEnabled(enabled);
+        if (enabled && !Enabled)
+            Print($"{Name}: failed to enable, see /xllog for details.");
+        else
+            ReportStateChange(Name, previous, Enabled);
+    }
+
+    /// <summary>The single path for turning a tweak on or off (chat command and
+    /// config window): persists the request, applies it, and leaves Enabled
+    /// reflecting what actually happened.</summary>
+    public void SetEnabled(bool enabled)
+    {
         ConfigEnabled = enabled;
         Plugin.Configuration.Save();
         if (enabled) EnableTweak();
         else DisableTweak();
-        ReportStateChange(Name, previous, enabled);
     }
 
     public void EnableTweak()

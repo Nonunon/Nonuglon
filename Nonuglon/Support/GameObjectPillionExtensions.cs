@@ -24,7 +24,10 @@ public static unsafe class GameObjectPillionExtensions
         if (obj == null) return false;
         var mount = obj.Character()->Mount;
         var extraSeats = Svc.Data.GetExcelSheet<Mount>().TryGetRow(mount.MountId, out var mountRow) ? mountRow.ExtraSeats : 0;
-        return mount.MountedEntityIds[1..].ToArray().Count(x => x != 0) < extraSeats;
+        var occupied = 0;
+        for (var i = 1; i < mount.MountedEntityIds.Length; i++)
+            if (mount.MountedEntityIds[i] != 0) occupied++;
+        return occupied < extraSeats;
     }
 
     /// <summary>Matches name AND home world (the original tweak only checked
@@ -35,5 +38,5 @@ public static unsafe class GameObjectPillionExtensions
             o.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc &&
             o is IPlayerCharacter pc &&
             pc.HomeWorld.RowId == worldId &&
-            pc.Name.TextValue == name);
+            string.Equals(pc.Name.TextValue, name, System.StringComparison.OrdinalIgnoreCase));
 }

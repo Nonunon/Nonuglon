@@ -63,6 +63,9 @@ public sealed class Plugin : IDalamudPlugin
             Log.Information($"Auto Pillion: {Configuration.AutoPillionFavoriteTargets.Count} favorite(s) from before world-aware matching are still on file " +
                 $"({string.Join(", ", Configuration.AutoPillionFavoriteTargets)}) but can't be auto-migrated without knowing their world. " +
                 "Re-add them via the config UI or \"/Nonuglon autopillion target add <name>@<world>\".");
+            // Logged once, then cleared, so this doesn't repeat on every load.
+            Configuration.AutoPillionFavoriteTargets.Clear();
+            Configuration.Save();
         }
 #pragma warning restore CS0618
 
@@ -101,7 +104,7 @@ public sealed class Plugin : IDalamudPlugin
             else renderToggle.HandleCommand(parts);
         })
         {
-            HelpMessage = $"Alias for /Nonuglon {renderToggle.CommandName}. With no arguments, flips 3D rendering directly (mini-tweak must be on)."
+            HelpMessage = $"Alias for /Nonuglon {renderToggle.CommandName}. With no arguments, flips 3D rendering directly (Commands and the mini-tweak must both be on)."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system

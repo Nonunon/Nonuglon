@@ -9,7 +9,7 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "Add as Auto Pillion favorite" to Chat 2's own right-click menu,
+/// <summary>Adds "Add to Auto Pillion" to Chat 2's own right-click menu,
 /// via Chat 2's EzIPC hook (Register/Unregister/Invoke) rather than Dalamud's
 /// normal OnMenuOpened, since Chat 2 renders its own chat log outside the native
 /// addons. SafeWrapper.AnyException means EzIPC.Init leaves Register/Unregister
@@ -21,13 +21,14 @@ namespace Nonuglon.Tweaks;
 public class AutoPillionChat2Ipc : IDisposable
 {
     private string? currentId;
+    private readonly EzIPCDisposalToken[] ipcTokens;
 
     [EzIPC] private Func<string> Register = null!;
     [EzIPC] private Action<string> Unregister = null!;
 
     public AutoPillionChat2Ipc()
     {
-        EzIPC.Init(this, "ChatTwo", SafeWrapper.AnyException);
+        ipcTokens = EzIPC.Init(this, PluginDetection.Chat2InternalName, SafeWrapper.AnyException);
         // In case Chat 2 was already loaded; Available() re-fires this too.
         Available();
     }
@@ -40,25 +41,18 @@ public class AutoPillionChat2Ipc : IDisposable
     {
         if (id != currentId || sender is null) return;
 
-        if (ImGui.Selectable($"[{ContextMenuBranding.PrefixChar}] Add to AutoPillion"))
+        if (ImGui.Selectable($"[{ContextMenuBranding.PrefixChar}] Add to Auto Pillion"))
         {
-            var favorites = Plugin.Configuration.AutoPillionFavorites;
             var worldId = sender.World.RowId;
-            if (worldId != 0 && !favorites.Any(f => f.Name == sender.PlayerName && f.WorldId == worldId))
-            {
-                favorites.Add(new AutoPillionFavorite
-                {
-                    Name = sender.PlayerName,
-                    WorldId = worldId,
-                    WorldName = sender.World.ValueNullable?.Name.ExtractText() ?? string.Empty
-                });
-                Plugin.Configuration.Save();
-            }
+            if (worldId != 0)
+                AutoPillion.AddFavorite(sender.PlayerName, worldId);
         }
     }
 
     public void Dispose()
     {
         if (currentId != null) Unregister(currentId);
+        foreach (var token in ipcTokens)
+            token.Dispose();
     }
 }

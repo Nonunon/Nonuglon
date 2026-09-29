@@ -65,6 +65,7 @@ public sealed unsafe class SearchInfoMenu : TweakBase
     {
         menuItem.OnClicked = OpenSearchInfo;
         Svc.ContextMenu.OnMenuOpened += OnContextMenuOpened;
+        Svc.Framework.Update -= OnFrameworkUpdate;
         Svc.Framework.Update += OnFrameworkUpdate;
         SyncChat2Integration(tweakEnabled: true);
     }
@@ -72,9 +73,18 @@ public sealed unsafe class SearchInfoMenu : TweakBase
     protected override void Disable()
     {
         Svc.ContextMenu.OnMenuOpened -= OnContextMenuOpened;
+        // AgentDetail may still be reading a just-opened buffer, so let
+        // OnFrameworkUpdate drain (and then unsubscribe) instead of freeing now.
+        if (retainedCharacterData.Count == 0)
+            Svc.Framework.Update -= OnFrameworkUpdate;
+        SyncChat2Integration(tweakEnabled: false);
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
         Svc.Framework.Update -= OnFrameworkUpdate;
         FreeRetainedCharacterData();
-        SyncChat2Integration(tweakEnabled: false);
     }
 
     /// <summary>Creates/tears down the Chat 2 IPC integration. Takes an explicit
@@ -103,7 +113,7 @@ public sealed unsafe class SearchInfoMenu : TweakBase
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Right-click a name in Chat 2's own chat log, then look under Integrations for \"View Search Info\". Requires the Chat 2 plugin, and only works while the sender is actually nearby/rendered (same as the native right-click version).");
 
-        if (chat2Enabled && !PluginDetection.IsPluginLoaded("ChatTwo"))
+        if (chat2Enabled && !PluginDetection.IsPluginLoaded(PluginDetection.Chat2InternalName))
         {
             ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
             ImGui.TextColored(UiColors.Warning, "Chat 2 not detected - this integration has no effect until it's installed and loaded.");
@@ -177,8 +187,16 @@ public sealed unsafe class SearchInfoMenu : TweakBase
     private static void WriteUtf8(string value, Span<byte> destination)
     {
         destination.Clear();
-        if (destination.Length != 0 && !string.IsNullOrWhiteSpace(value) && Encoding.UTF8.GetBytes(value.AsSpan(), destination) >= destination.Length)
-            destination[destination.Length - 1] = 0;
+        if (destination.Length == 0 || string.IsNullOrWhiteSpace(value)) return;
+
+        // GetBytes throws on a too-small buffer rather than truncating, so encode
+        // first and copy what fits, leaving room for the NUL and never cutting a
+        // multi-byte character in half.
+        var bytes = Encoding.UTF8.GetBytes(value);
+        var length = Math.Min(bytes.Length, destination.Length - 1);
+        while (length > 0 && length < bytes.Length && (bytes[length] & 0xC0) == 0x80)
+            length--;
+        bytes.AsSpan(0, length).CopyTo(destination);
     }
 
     private RetainedCharacterData RetainCharacterData(InfoProxyCommonList.CharacterData data)
@@ -206,6 +224,9 @@ public sealed unsafe class SearchInfoMenu : TweakBase
                 retainedCharacterData.RemoveAt(i);
             }
         }
+
+        if (!Enabled && retainedCharacterData.Count == 0)
+            Svc.Framework.Update -= OnFrameworkUpdate;
     }
 
     private void FreeRetainedCharacterData()

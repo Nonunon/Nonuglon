@@ -9,22 +9,13 @@ internal static unsafe class AddonArgsReceiveEventExtensions
 {
     public static T* GetAddon<T>(this AddonArgs args) where T : unmanaged => (T*)args.Addon.Address;
 
-    public static AtkEvent* GenerateEvent(this AddonArgs args)
+    /// <summary>The event and its data are locals of this method on purpose: they must
+    /// stay alive on this stack frame for the duration of the native ReceiveEvent call.</summary>
+    public static void ReceiveEvent(this AddonArgs args, AtkEventType eventType, int eventParam)
     {
-        var evt = new AtkEvent { Listener = &args.GetAddon<AtkUnitBase>()->AtkEventListener, Target = &AtkStage.Instance()->AtkEventTarget };
-        return &evt;
-    }
-
-    public static AtkEventData* GenerateEventData(this AddonArgs _)
-    {
-        var data = new AtkEventData();
-        return &data;
-    }
-
-    public static void ReceiveEvent(this AddonArgs args, AtkEventType eventType, int eventParam, AtkEvent* atkEvent = null, AtkEventData* atkEventData = null)
-    {
-        var evt = atkEvent == null ? args.GenerateEvent() : atkEvent;
-        var evtData = atkEventData == null ? args.GenerateEventData() : atkEventData;
-        args.GetAddon<AtkUnitBase>()->ReceiveEvent(eventType, eventParam, evt, evtData);
+        var addon = args.GetAddon<AtkUnitBase>();
+        var evt = new AtkEvent { Listener = &addon->AtkEventListener, Target = &AtkStage.Instance()->AtkEventTarget };
+        var evtData = new AtkEventData();
+        addon->ReceiveEvent(eventType, eventParam, &evt, &evtData);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
@@ -46,6 +47,9 @@ public unsafe class AutoPillion : TweakBase
     /// <summary>0 = idle/not attempting. Otherwise, the Environment.TickCount64 at
     /// which the current attempt should be considered timed out.</summary>
     private long attemptExpiresAt;
+
+    private const int ScanIntervalMs = 250;
+    private long nextScanAt;
 
     private AutoPillionContextMenu? contextMenu;
     private AutoPillionChat2Ipc? chat2Ipc;
@@ -95,6 +99,15 @@ public unsafe class AutoPillion : TweakBase
             attemptExpiresAt = 0;
             return;
         }
+
+        // Not worth trying mid-zone-change or in a cutscene, and the object
+        // scans below don't need to run every frame.
+        if (Svc.Condition[ConditionFlag.BetweenAreas] || Svc.Condition[ConditionFlag.BetweenAreas51]
+            || Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Svc.Condition[ConditionFlag.WatchingCutscene]
+            || Svc.Condition[ConditionFlag.WatchingCutscene78])
+            return;
+        if (Environment.TickCount64 < nextScanAt) return;
+        nextScanAt = Environment.TickCount64 + ScanIntervalMs;
 
         // Still waiting on the last attempt - don't spam RidePillion every frame.
         if (attemptExpiresAt != 0 && Environment.TickCount64 < attemptExpiresAt)
@@ -183,9 +196,9 @@ public unsafe class AutoPillion : TweakBase
         }
         HelpMarker(
             "Right-click a name in Chat 2's own chat log, then look under Integrations for \"Add to Auto Pillion\". Requires the Chat 2 plugin.",
-            warning: chat2Enabled && !PluginDetection.IsPluginLoaded("ChatTwo"));
+            warning: chat2Enabled && !PluginDetection.IsPluginLoaded(PluginDetection.Chat2InternalName));
 
-        if (chat2Enabled && !PluginDetection.IsPluginLoaded("ChatTwo"))
+        if (chat2Enabled && !PluginDetection.IsPluginLoaded(PluginDetection.Chat2InternalName))
         {
             ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
             ImGui.TextColored(UiColors.Warning, "Chat 2 not detected - this integration has no effect until it's installed and loaded.");
@@ -205,7 +218,7 @@ public unsafe class AutoPillion : TweakBase
         ImGui.InputTextWithHint("##AutoPillionNewFavoriteWorld", "World", ref newFavoriteWorldInput, 32);
         ImGui.SameLine();
         if (ImGui.Button("Add##AutoPillionFavorite"))
-            TryAddFavorite(config);
+            TryAddFavorite();
 
         if (newFavoriteError is { } error)
         {
@@ -265,10 +278,24 @@ public unsafe class AutoPillion : TweakBase
             ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
     }
 
+    /// <summary>The one place a favorite gets added, for the config UI, chat
+    /// command, and both context-menu paths. Name is matched case-insensitively
+    /// since the game's own names are; returns false if it was already saved.</summary>
+    public static bool AddFavorite(string name, uint worldId)
+    {
+        var favorites = Plugin.Configuration.AutoPillionFavorites;
+        if (favorites.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && f.WorldId == worldId))
+            return false;
+
+        favorites.Add(new AutoPillionFavorite { Name = name, WorldId = worldId, WorldName = WorldLookup.GetName(worldId) });
+        Plugin.Configuration.Save();
+        return true;
+    }
+
     /// <summary>Validates and adds a favorite from the input fields above; the
     /// world must resolve via WorldLookup so a typo can't save an unmatchable
     /// favorite. Sets newFavoriteError rather than throwing/logging.</summary>
-    private void TryAddFavorite(Configuration config)
+    private void TryAddFavorite()
     {
         var name = newFavoriteNameInput.Trim();
         var worldInput = newFavoriteWorldInput.Trim();
@@ -285,14 +312,11 @@ public unsafe class AutoPillion : TweakBase
             return;
         }
 
-        if (config.AutoPillionFavorites.Any(f => f.Name == name && f.WorldId == world.RowId))
+        if (!AddFavorite(name, world.RowId))
         {
             newFavoriteError = $"\"{name}@{world.Name.ExtractText()}\" is already a favorite.";
             return;
         }
-
-        config.AutoPillionFavorites.Add(new AutoPillionFavorite { Name = name, WorldId = world.RowId, WorldName = world.Name.ExtractText() });
-        config.Save();
 
         newFavoriteNameInput = string.Empty;
         newFavoriteWorldInput = string.Empty;
@@ -317,7 +341,7 @@ public unsafe class AutoPillion : TweakBase
                 var previousRestrict = Plugin.Configuration.AutoPillionRestrictToPerson;
                 Plugin.Configuration.AutoPillionRestrictToPerson = restrict;
                 Plugin.Configuration.Save();
-                ReportStateChange("Auto Pillion: restrict to one person", previousRestrict, restrict);
+                ReportStateChange("Auto Pillion: restrict to favorites", previousRestrict, restrict);
                 return;
             }
 
@@ -405,13 +429,11 @@ public unsafe class AutoPillion : TweakBase
                     return;
                 }
                 var worldName = world.Name.ExtractText();
-                if (favorites.Any(f => f.Name == name && f.WorldId == world.RowId))
+                if (!AddFavorite(name, world.RowId))
                 {
                     Svc.Log.Debug($"Auto Pillion: \"{name}@{worldName}\" is already a favorite. (already was, no change)");
                     return;
                 }
-                favorites.Add(new AutoPillionFavorite { Name = name, WorldId = world.RowId, WorldName = worldName });
-                Plugin.Configuration.Save();
                 Print($"Auto Pillion: added \"{name}@{worldName}\" as a favorite.");
                 return;
             }
@@ -424,9 +446,9 @@ public unsafe class AutoPillion : TweakBase
                     Print($"Usage: /Nonuglon {CommandNames[0]} target remove <name>@<world>");
                     return;
                 }
-                var removed = favorites.RemoveAll(f =>
-                    f.Name.Equals(name, StringComparison.Ordinal) &&
-                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                var removed = WorldLookup.TryFindWorld(worldInput, out var removeWorld)
+                    ? favorites.RemoveAll(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && f.WorldId == removeWorld.RowId)
+                    : 0;
                 if (removed > 0)
                 {
                     Plugin.Configuration.Save();
@@ -449,9 +471,9 @@ public unsafe class AutoPillion : TweakBase
                     Print($"Usage: /Nonuglon {CommandNames[0]} target {args[1].ToLowerInvariant()} <name>@<world>");
                     return;
                 }
-                var favorite = favorites.FirstOrDefault(f =>
-                    f.Name.Equals(name, StringComparison.Ordinal) &&
-                    f.WorldName.Equals(worldInput, StringComparison.OrdinalIgnoreCase));
+                var favorite = WorldLookup.TryFindWorld(worldInput, out var matchWorld)
+                    ? favorites.FirstOrDefault(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && f.WorldId == matchWorld.RowId)
+                    : null;
                 if (favorite is null)
                 {
                     Print($"Auto Pillion: \"{name}@{worldInput}\" isn't a saved favorite.");
