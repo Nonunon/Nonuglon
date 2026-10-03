@@ -5,3 +5,7 @@ bin/
 CLAUDE.md
 /build/
 /_release_check/
+
+# Personal release launcher (see Release_Nonuglon.ps1), not part of the repo
+/Release_Nonuglon.ps1
+/Release_Nonuglon.bat
