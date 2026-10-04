@@ -50,6 +50,22 @@ public class Configuration : IPluginConfiguration
 
     public bool EstateTeleportationEnabled { get; set; } = false;
 
+    public bool NavigateFlagEnabled { get; set; } = false;
+    /// <summary>Mount (roulette) before travelling, when allowed.</summary>
+    public bool NavigateFlagUseMount { get; set; } = true;
+    /// <summary>Mount id to summon (0 = Mount Roulette). Shared across characters;
+    /// one that doesn't own it falls back to roulette.</summary>
+    public uint NavigateFlagMountId { get; set; } = 0;
+    /// <summary>Re-path flying runs that end beyond the arrive distance.</summary>
+    public bool NavigateFlagCorrectFlying { get; set; } = false;
+    /// <summary>"go" during a run retargets it to the current flag instead of
+    /// being refused, like re-sending /vnav flyflag.</summary>
+    public bool NavigateFlagRestartOnGo { get; set; } = true;
+    /// <summary>Which stacked surface under the flag a flying run aims for.</summary>
+    public FlyLayerMode NavigateFlagFlyLayer { get; set; } = FlyLayerMode.Nearest;
+    /// <summary>Flat (X/Z) distance from the destination that counts as arrived.</summary>
+    public float NavigateFlagArriveDistance { get; set; } = 2f;
+
     /// <summary>Master switch for "Commands" (see Tweaks/Commands.cs). Disables
     /// every mini-tweak's effect without touching their own flags below.</summary>
     public bool CommandsEnabled { get; set; } = false;
@@ -68,6 +84,16 @@ public class Configuration : IPluginConfiguration
     {
         Plugin.PluginInterface.SavePluginConfig(this);
     }
+}
+
+/// <summary>Navigate to Flag's flying target when surfaces are stacked under
+/// the flag (floating islands, ledges): the one nearest your height, the top
+/// one (vnavmesh's behavior), or only walkable-reachable ground.</summary>
+public enum FlyLayerMode
+{
+    Nearest,
+    Top,
+    Ground,
 }
 
 /// <summary>A single Auto Pillion favorite. WorldId is what OnUpdate matches

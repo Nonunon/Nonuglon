@@ -7,6 +7,7 @@ namespace Nonuglon.Support;
 public static class PluginDetection
 {
     public const string Chat2InternalName = "ChatTwo";
+    public const string VnavmeshInternalName = "vnavmesh";
 
     /// <summary>Internal name may differ from the plugin installer's display
     /// name - check the manifest if unsure. Re-evaluates live, no caching.</summary>

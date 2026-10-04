@@ -15,6 +15,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Saddlebag Entrust Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a player from menus such as the party list, chat log, free company, or linkshells (but not the friend list itself) when they are on your friend list and their home world is your current world, opening the estate-teleport window for them directly.
+- **Navigate to Flag** - travels to your map flag via [vnavmesh](https://github.com/awgil/ffxiv_navmesh), mounting (your pick of mount) and flying when it can. Picks its own spot under the flag rather than using `/vnav moveflag`/`flyflag`'s.
 - **Commands** - a grab-bag of tiny single-setting "mini-tweaks".
   - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
   - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
@@ -62,6 +63,10 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon searchinfo <on|off|toggle>
 
 /Nonuglon estateteleport <on|off|toggle>           alias: estate
+
+/Nonuglon navflag <on|off|toggle>                  alias: flag
+/Nonuglon navflag go                               travel to the flag; while running, retargets to the current flag
+/Nonuglon navflag stop
 
 /Nonuglon commands <on|off|toggle>                 master switch for every mini-tweak below
 /Nonuglon commands inactivefps <on|off|toggle>      same as /Nonuglon inactivefps below
