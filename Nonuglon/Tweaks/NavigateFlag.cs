@@ -74,6 +74,7 @@ public unsafe class NavigateFlag : TweakBase
 
     protected override void Disable()
     {
+        CancelReadyWait();
         Finish("tweak disabled", quiet: true);
         Svc.Framework.Update -= OnPendingStop;
     }
@@ -90,7 +91,8 @@ public unsafe class NavigateFlag : TweakBase
                 Start();
                 return;
             case "stop":
-                if (IsRunning) Finish("stopped by command");
+                if (readyWaiting) CancelReadyWait();
+                else if (IsRunning) Finish("stopped by command");
                 else Print($"{Name}: nothing running.");
                 return;
             default:
@@ -109,7 +111,11 @@ public unsafe class NavigateFlag : TweakBase
             return;
         }
         if (!VnavmeshIpc.IsLoaded) { Print($"{Name}: vnavmesh isn't loaded."); return; }
-        if (!VnavmeshIpc.IsReady()) { Print($"{Name}: vnavmesh's navmesh isn't ready yet."); return; }
+        if (!VnavmeshIpc.IsReady())
+        {
+            if (!readyWaiting) BeginReadyWait();
+            return;
+        }
         if (VnavmeshIpc.IsPathRunning() || VnavmeshIpc.IsPathfindInProgress())
         {
             // Someone else (another plugin, a manual /vnav) is driving; don't fight it.
@@ -133,6 +139,47 @@ public unsafe class NavigateFlag : TweakBase
         }
 
         BeginPathing();
+    }
+
+    // A "go" sent right after a zone change can beat vnavmesh's navmesh load, so
+    // retry for a configurable while before reporting it isn't ready.
+    private static long ReadyRetryMs => (long)(Math.Max(0f, Plugin.Configuration.NavigateFlagReadyRetrySeconds) * 1000);
+    private static long ReadyTimeoutMs => (long)(Math.Max(0f, Plugin.Configuration.NavigateFlagReadyTimeoutSeconds) * 1000);
+    private bool readyWaiting;
+    private long readyDeadline;
+    private long readyNextCheck;
+
+    private void BeginReadyWait()
+    {
+        readyWaiting = true;
+        readyDeadline = Environment.TickCount64 + ReadyTimeoutMs;
+        readyNextCheck = Environment.TickCount64 + ReadyRetryMs;
+        Svc.Framework.Update -= OnReadyWait;
+        Svc.Framework.Update += OnReadyWait;
+    }
+
+    private void CancelReadyWait()
+    {
+        readyWaiting = false;
+        Svc.Framework.Update -= OnReadyWait;
+    }
+
+    private void OnReadyWait(IFramework _)
+    {
+        var now = Environment.TickCount64;
+        if (now < readyNextCheck) return;
+        readyNextCheck = now + ReadyRetryMs;
+
+        if (VnavmeshIpc.IsLoaded && VnavmeshIpc.IsReady())
+        {
+            CancelReadyWait();
+            Start();
+        }
+        else if (now >= readyDeadline)
+        {
+            CancelReadyWait();
+            Print($"{Name}: vnavmesh's navmesh isn't ready yet.");
+        }
     }
 
     /// <summary>Same as NavigateFlag.lua: mounting would break stealth or drop
@@ -208,7 +255,10 @@ public unsafe class NavigateFlag : TweakBase
         Svc.Framework.Update -= OnUpdate;
 
         Svc.Log.Debug($"[NavFlag] finished: {reason}");
-        if (!quiet) Print($"{Name}: {reason}.");
+        var config = Plugin.Configuration;
+        var muted = (config.NavigateFlagMuteArrived && reason.StartsWith("arrived"))
+                 || (config.NavigateFlagMuteStopped && reason == "stopped by command");
+        if (!quiet && !muted) Print($"{Name}: {reason}.");
     }
 
     private const long PendingStopTimeoutMs = 60000;
@@ -514,6 +564,21 @@ public unsafe class NavigateFlag : TweakBase
             config.Save();
         }
 
+        var retry = config.NavigateFlagReadyRetrySeconds;
+        if (ImGui.SliderFloat("Navmesh retry interval (s)##NavigateFlag", ref retry, 0.1f, 1f, "%.1f"))
+        {
+            config.NavigateFlagReadyRetrySeconds = retry;
+            config.Save();
+        }
+        var timeout = config.NavigateFlagReadyTimeoutSeconds;
+        if (ImGui.SliderFloat("Navmesh retry timeout (s)##NavigateFlag", ref timeout, 0.1f, 10f, "%.1f"))
+        {
+            config.NavigateFlagReadyTimeoutSeconds = timeout;
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("If Go is sent before vnavmesh's navmesh is ready, check again every interval until the timeout, then give up. Ctrl+click a slider to type any value.");
+
         if (!Enabled) return;
         ImGui.Spacing();
         if (!IsRunning || config.NavigateFlagRestartOnGo)
@@ -549,6 +614,20 @@ public unsafe class NavigateFlag : TweakBase
 
     private void DrawDebug()
     {
+        var config = Plugin.Configuration;
+        var muteArrived = config.NavigateFlagMuteArrived;
+        if (ImGui.Checkbox("Hide \"arrived\" chat message##NavigateFlagDebug", ref muteArrived))
+        {
+            config.NavigateFlagMuteArrived = muteArrived;
+            config.Save();
+        }
+        var muteStopped = config.NavigateFlagMuteStopped;
+        if (ImGui.Checkbox("Hide \"stopped by command\" chat message##NavigateFlagDebug", ref muteStopped))
+        {
+            config.NavigateFlagMuteStopped = muteStopped;
+            config.Save();
+        }
+
         // The IPC queries aren't free, so only refresh a few times a second,
         // and only while this node is open.
         if (Environment.TickCount64 >= nextDebugAt)

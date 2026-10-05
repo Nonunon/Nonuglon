@@ -63,6 +63,14 @@ public class Configuration : IPluginConfiguration
     public bool NavigateFlagRestartOnGo { get; set; } = true;
     /// <summary>Which stacked surface under the flag a flying run aims for.</summary>
     public FlyLayerMode NavigateFlagFlyLayer { get; set; } = FlyLayerMode.Nearest;
+    /// <summary>Seconds between navmesh-ready checks after "go" beats vnavmesh's load.</summary>
+    public float NavigateFlagReadyRetrySeconds { get; set; } = 0.5f;
+    /// <summary>Seconds to keep retrying before reporting the navmesh isn't ready.</summary>
+    public float NavigateFlagReadyTimeoutSeconds { get; set; } = 2f;
+    /// <summary>Hide the "arrived" chat line (still logged).</summary>
+    public bool NavigateFlagMuteArrived { get; set; } = false;
+    /// <summary>Hide the "stopped by command" chat line (still logged).</summary>
+    public bool NavigateFlagMuteStopped { get; set; } = false;
     /// <summary>Flat (X/Z) distance from the destination that counts as arrived.</summary>
     public float NavigateFlagArriveDistance { get; set; } = 2f;
 
