@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using ECommons;
+using Nonuglon.Support;
 using Nonuglon.Tweaks;
 using Nonuglon.Windows;
 using static Nonuglon.Support.CommandText;
@@ -45,6 +46,7 @@ public sealed class Plugin : IDalamudPlugin
         // ObjectFunctions for EntrustChocoboDuplicates) - others would just add
         // startup/shutdown noise to /xllog.
         ECommonsMain.Init(PluginInterface, this, ECommons.Module.DalamudReflector, ECommons.Module.ObjectFunctions);
+        KamiToolKitHost.Initialize(PluginInterface);
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -163,6 +165,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler($"/{inactiveFps.CommandName}");
         CommandManager.RemoveHandler($"/{renderToggle.CommandName}");
 
+        KamiToolKitHost.Dispose();
         ECommonsMain.Dispose();
     }
 

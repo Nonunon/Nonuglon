@@ -1,13 +1,15 @@
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Utility;
 using ECommons.Automation.NeoTaskManager;
 using ECommons.DalamudServices;
 using ECommons.ImGuiMethods;
 using ECommons.UIHelpers.AddonMasterImplementations;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using KamiToolKit.Controllers;
+using KamiToolKit.Nodes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
@@ -18,8 +20,8 @@ namespace Nonuglon.Tweaks;
 
 /// <summary>Ported from PandorasBox's
 /// (https://github.com/PunishXIV/PandorasBox, BSD-3-Clause)
-/// Features/UI/EntrustChocoboDuplicates.cs, re-hosted on TweakBase (draws off
-/// UiBuilder.Draw directly) instead of PandorasBox's own window system.</summary>
+/// Features/UI/EntrustChocoboDuplicates.cs, re-hosted on TweakBase, with the button
+/// as a native KamiToolKit node instead of PandorasBox's ImGui overlay.</summary>
 public unsafe class EntrustChocoboDuplicates : TweakBase
 {
     public override string Name => "Saddlebag Duplicates";
@@ -37,7 +39,10 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
     private const string AetherBagsSaddlebagAddonName = "AetherBags_SaddleBag";
     private const uint WindowNodeId = 2;
     private const float ReservedFooterStripHeight = 40f;
+    private const float ButtonLeftInset = 10f;
+    private const float ButtonLift = 10f;
     private static readonly Vector2 MinPopupSize = new(1f, 1f);
+    private static readonly Vector2 ButtonSize = new(140f, 28f);
 
     private static readonly InventoryType[] PlayerInventory =
         [InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4];
@@ -50,17 +55,107 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
     /// detected, instead of the tweak's button just silently never appearing.</summary>
     public static bool IsAetherBagsAvailable => PluginDetection.IsPluginLoaded(AetherBagsPluginInternalName);
 
-    protected override void Enable() => Svc.PluginInterface.UiBuilder.Draw += Draw;
+    private AddonController? controller;
+    private TextButtonNode? button;
+    private bool wantEnabled;
+
+    protected override void Enable()
+    {
+        wantEnabled = true;
+        Svc.PluginInterface.UiBuilder.Draw += Draw;
+        ApplyMode();
+    }
+
+    private static bool UseNativeButton => Plugin.Configuration.EntrustChocoboNativeButton;
+
+    // Native (KamiToolKit) or ImGui button, per config; the other one is torn down.
+    private void ApplyMode()
+    {
+        if (!UseNativeButton)
+        {
+            DisposeNative();
+            return;
+        }
+
+        // KamiToolKit finishes initializing asynchronously after plugin load.
+        KamiToolKitHost.Ready.ContinueWith(_ => Svc.Framework.RunOnFrameworkThread(CreateController));
+    }
+
+    private void DisposeNative()
+    {
+        controller?.Dispose();
+        controller = null;
+        DisposeButton();
+    }
 
     protected override void Disable()
     {
+        wantEnabled = false;
         Svc.PluginInterface.UiBuilder.Draw -= Draw;
+        DisposeNative();
         if (taskManager.NumQueuedTasks > 0)
             taskManager.Abort();
     }
 
+    private void CreateController()
+    {
+        if (!wantEnabled || !UseNativeButton || controller != null) return;
+
+        controller = new AddonController
+        {
+            AddonName = AetherBagsSaddlebagAddonName,
+            OnSetup = OnSetup,
+            OnFinalize = _ => DisposeButton(),
+            OnUpdate = OnUpdate,
+        };
+        controller.Enable();
+    }
+
+    private void OnSetup(AtkUnitBase* addon)
+    {
+        DisposeButton();
+        button = new TextButtonNode
+        {
+            String = "Entrust Duplicates",
+            Size = ButtonSize,
+            OnClick = EnqueueEntrustDuplicates,
+        };
+        Place(addon);
+        button.AttachNode(addon);
+    }
+
+    // The window can be resized, so keep the button on its bottom edge.
+    private void OnUpdate(AtkUnitBase* addon) => Place(addon);
+
+    private void Place(AtkUnitBase* addon)
+    {
+        if (button == null) return;
+        var node = addon->GetNodeById(WindowNodeId);
+        if (node == null) return;
+
+        var scale = addon->Scale > 0f ? addon->Scale : 1f;
+        var origin = new Vector2(node->ScreenX - addon->X, node->ScreenY - addon->Y) / scale;
+        var y = origin.Y + node->Height - ReservedFooterStripHeight + (ReservedFooterStripHeight - ButtonSize.Y) / 2f - ButtonLift;
+        button.Position = new Vector2(origin.X + ButtonLeftInset, y);
+    }
+
+    private void DisposeButton()
+    {
+        button?.Dispose();
+        button = null;
+    }
+
     public override void DrawOptions()
     {
+        var native = UseNativeButton;
+        if (ImGui.Checkbox("Native button (KamiToolKit)##EntrustNative", ref native))
+        {
+            Plugin.Configuration.EntrustChocoboNativeButton = native;
+            Plugin.Configuration.Save();
+            if (Enabled) ApplyMode();
+        }
+        ImGui.TextDisabled("Off draws the button with ImGui instead.");
+
         if (IsAetherBagsAvailable) return;
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
@@ -72,6 +167,8 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
 
     private void Draw()
     {
+        if (UseNativeButton) return;
+
         var addonPtr = Svc.GameGui.GetAddonByName(AetherBagsSaddlebagAddonName).Address;
         if (addonPtr == nint.Zero) return;
 

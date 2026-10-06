@@ -42,6 +42,7 @@ public class Configuration : IPluginConfiguration
     public int AutoPillionRetryTimeoutMs { get; set; } = 2000;
 
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = false;
+    public bool EntrustChocoboNativeButton { get; set; } = true;
 
     public bool SearchInfoMenuEnabled { get; set; } = false;
     /// <summary>Chat 2's right-click integration for View Search Info, same
