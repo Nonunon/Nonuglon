@@ -126,9 +126,9 @@ public class ConfigWindow : Window, IDisposable
     }
 
     /// <summary>Shared status-dot glyph+color so the sidebar and detail pane
-    /// (and MainWindow) never disagree. Always the same circle glyph (FFXIV's font lacks a
+    /// never disagree. Always the same circle glyph (FFXIV's font lacks a
     /// warning-triangle) - warning is conveyed by color alone.</summary>
-    internal static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
+    private static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
     {
         if (!tweak.Enabled) return ("\u25cb", UiColors.Disabled);
         return ("\u25cf", tweak.HasWarning ? UiColors.Warning : UiColors.Enabled);

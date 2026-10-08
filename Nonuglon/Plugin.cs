@@ -27,7 +27,6 @@ public sealed class Plugin : IDalamudPlugin
 
     public readonly WindowSystem WindowSystem = new("Nonuglon");
     private ConfigWindow ConfigWindow { get; init; }
-    private MainWindow MainWindow { get; init; }
 
     // -- Tweaks --
     public readonly List<TweakBase> Tweaks = [];
@@ -51,10 +50,8 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this);
 
         WindowSystem.AddWindow(ConfigWindow);
-        WindowSystem.AddWindow(MainWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -95,8 +92,8 @@ public sealed class Plugin : IDalamudPlugin
         // toggling the display status of the configuration ui
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
 
-        // Adds another button doing the same but for the main ui of the plugin
-        PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
+        // No separate main window: the installer's main-UI button opens settings too.
+        PluginInterface.UiBuilder.OpenMainUi += ToggleConfigUi;
 
         Tweaks.Add(new InstantReturn());
         Tweaks.Add(new AutoPillion());
@@ -132,12 +129,11 @@ public sealed class Plugin : IDalamudPlugin
         // Unregister all actions to not leak anything during disposal of plugin
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
-        PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
+        PluginInterface.UiBuilder.OpenMainUi -= ToggleConfigUi;
 
         WindowSystem.RemoveAllWindows();
 
         ConfigWindow.Dispose();
-        MainWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
         CommandManager.RemoveHandler(CommandNameAlias);
@@ -189,5 +185,4 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
-    public void ToggleMainUi() => MainWindow.Toggle();
 }

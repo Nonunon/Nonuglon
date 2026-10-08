@@ -240,38 +240,64 @@ public unsafe class AutoPillion : TweakBase
             var removeIndex = -1;
             var moveFrom = -1;
             var moveTo = -1;
-            for (var i = 0; i < favorites.Count; i++)
+
+            const ImGuiTableFlags tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit;
+            if (ImGui.BeginTable("##AutoPillionFavorites", 6, tableFlags))
             {
-                var favorite = favorites[i];
+                ImGui.TableSetupColumn("#");
+                ImGui.TableSetupColumn("Order");
+                ImGui.TableSetupColumn("On");
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn("World");
+                ImGui.TableSetupColumn("");
+                ImGui.TableHeadersRow();
 
-                ImGui.BeginDisabled(i == 0);
-                if (ImGui.ArrowButton($"##AutoPillionFavoriteUp{i}", ImGuiDir.Up)) (moveFrom, moveTo) = (i, i - 1);
-                ImGui.EndDisabled();
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Move up (tried first when several favorites are in range).");
-                ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
-                ImGui.BeginDisabled(i == favorites.Count - 1);
-                if (ImGui.ArrowButton($"##AutoPillionFavoriteDown{i}", ImGuiDir.Down)) (moveFrom, moveTo) = (i, i + 1);
-                ImGui.EndDisabled();
-                ImGui.SameLine();
-
-                var favoriteEnabled = favorite.Enabled;
-                if (ImGui.Checkbox($"##AutoPillionFavoriteEnabled{i}", ref favoriteEnabled))
+                for (var i = 0; i < favorites.Count; i++)
                 {
-                    favorite.Enabled = favoriteEnabled;
-                    config.Save();
+                    var favorite = favorites[i];
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    ImGui.TextDisabled($"{i + 1}");
+
+                    ImGui.TableNextColumn();
+                    ImGui.BeginDisabled(i == 0);
+                    if (ImGui.ArrowButton($"##AutoPillionFavoriteUp{i}", ImGuiDir.Up)) (moveFrom, moveTo) = (i, i - 1);
+                    ImGui.EndDisabled();
+                    if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Move up (tried first when several favorites are in range).");
+                    ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+                    ImGui.BeginDisabled(i == favorites.Count - 1);
+                    if (ImGui.ArrowButton($"##AutoPillionFavoriteDown{i}", ImGuiDir.Down)) (moveFrom, moveTo) = (i, i + 1);
+                    ImGui.EndDisabled();
+
+                    ImGui.TableNextColumn();
+                    var favoriteEnabled = favorite.Enabled;
+                    if (ImGui.Checkbox($"##AutoPillionFavoriteEnabled{i}", ref favoriteEnabled))
+                    {
+                        favorite.Enabled = favoriteEnabled;
+                        config.Save();
+                    }
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("Unchecked: kept in the list, but skipped by matching - lets you rule someone out (or prefer another favorite ahead of them) without deleting them.");
+
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    if (favorite.Enabled) ImGui.TextUnformatted(favorite.Name);
+                    else ImGui.TextDisabled(favorite.Name);
+
+                    ImGui.TableNextColumn();
+                    ImGui.AlignTextToFramePadding();
+                    if (favorite.Enabled) ImGui.TextUnformatted(favorite.WorldName);
+                    else ImGui.TextDisabled(favorite.WorldName);
+
+                    ImGui.TableNextColumn();
+                    if (ImGui.Button($"x##AutoPillionFavorite{i}"))
+                        removeIndex = i;
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip("Remove");
                 }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Unchecked: kept in the list, but skipped by matching - lets you rule someone out (or prefer another favorite ahead of them) without deleting them.");
-                ImGui.SameLine();
 
-                if (favorite.Enabled)
-                    ImGui.Text($"{favorite.Name}@{favorite.WorldName}");
-                else
-                    ImGui.TextDisabled($"{favorite.Name}@{favorite.WorldName}");
-
-                ImGui.SameLine();
-                if (ImGui.Button($"x##AutoPillionFavorite{i}"))
-                    removeIndex = i;
+                ImGui.EndTable();
             }
 
             if (moveFrom >= 0)
