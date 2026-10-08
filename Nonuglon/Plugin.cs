@@ -50,27 +50,6 @@ public sealed class Plugin : IDalamudPlugin
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-#pragma warning disable CS0618 // AutoPillionTargetName is Obsolete - this is the one sanctioned read/write of it, migrating it into the new list on first load after upgrading.
-        if (!string.IsNullOrEmpty(Configuration.AutoPillionTargetName) && Configuration.AutoPillionFavoriteTargets.Count == 0)
-        {
-            Configuration.AutoPillionFavoriteTargets.Add(Configuration.AutoPillionTargetName);
-            Configuration.AutoPillionTargetName = string.Empty;
-            Configuration.Save();
-        }
-#pragma warning restore CS0618
-
-#pragma warning disable CS0618 // AutoPillionFavoriteTargets is Obsolete - read-only, one-time informational check. There's no world to migrate a bare name into, so this just surfaces the old list in the log instead of silently losing it.
-        if (Configuration.AutoPillionFavoriteTargets.Count > 0 && Configuration.AutoPillionFavorites.Count == 0)
-        {
-            Log.Information($"Auto Pillion: {Configuration.AutoPillionFavoriteTargets.Count} favorite(s) from before world-aware matching are still on file " +
-                $"({string.Join(", ", Configuration.AutoPillionFavoriteTargets)}) but can't be auto-migrated without knowing their world. " +
-                "Re-add them via the config UI or \"/Nonuglon autopillion target add <name>@<world>\".");
-            // Logged once, then cleared, so this doesn't repeat on every load.
-            Configuration.AutoPillionFavoriteTargets.Clear();
-            Configuration.Save();
-        }
-#pragma warning restore CS0618
-
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
 
@@ -166,6 +145,7 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler($"/{renderToggle.CommandName}");
 
         KamiToolKitHost.Dispose();
+        PluginDetection.Dispose();
         ECommonsMain.Dispose();
     }
 

@@ -45,7 +45,7 @@ public class AutoPillionChat2Ipc : IDisposable
         {
             var worldId = sender.World.RowId;
             if (worldId != 0)
-                AutoPillion.AddFavorite(sender.PlayerName, worldId);
+                AutoPillion.AddFavoriteAndReport(sender.PlayerName, worldId);
         }
     }
 

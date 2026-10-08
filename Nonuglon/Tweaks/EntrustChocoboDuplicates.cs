@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using ECommons.Automation.NeoTaskManager;
 using ECommons.DalamudServices;
@@ -78,7 +80,8 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         }
 
         // KamiToolKit finishes initializing asynchronously after plugin load.
-        KamiToolKitHost.Ready.ContinueWith(_ => Svc.Framework.RunOnFrameworkThread(CreateController));
+        KamiToolKitHost.Ready.ContinueWith(_ => Svc.Framework.RunOnFrameworkThread(CreateController),
+            TaskContinuationOptions.OnlyOnRanToCompletion);
     }
 
     private void DisposeNative()
@@ -156,6 +159,13 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         }
         ImGui.TextDisabled("Off draws the button with ImGui instead.");
 
+        if (UseNativeButton && KamiToolKitHost.Failed)
+        {
+            ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+            ImGui.TextColored(UiColors.Warning, "KamiToolKit failed to initialize (see /xllog), so the native button can't be shown. Turn this off to use the ImGui button.");
+            ImGui.PopTextWrapPos();
+        }
+
         if (IsAetherBagsAvailable) return;
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
@@ -163,7 +173,7 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         ImGui.PopTextWrapPos();
     }
 
-    public override bool HasWarning => Enabled && !IsAetherBagsAvailable;
+    public override bool HasWarning => Enabled && (!IsAetherBagsAvailable || (UseNativeButton && KamiToolKitHost.Failed));
 
     private void Draw()
     {
@@ -209,8 +219,11 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
 
     private void EnqueueEntrustDuplicates()
     {
+        // A second click mid-run would queue every slot again behind the first.
+        if (taskManager.IsBusy) return;
+
         var inv = InventoryManager.Instance();
-        var itemSheet = Svc.Data.GetExcelSheet<Item>();
+        var saddlebagIds = CollectSaddlebagItemIds(inv);
         foreach (var inventory in PlayerInventory)
         {
             var container = inv->GetInventoryContainer(inventory);
@@ -218,7 +231,7 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
             {
                 var item = container->GetInventorySlot(i);
                 if (item->ItemId == 0) continue;
-                if (!HasSaddlebagMatch(inv, itemSheet, item->ItemId)) continue;
+                if (!saddlebagIds.Contains(item->ItemId)) continue;
 
                 // One task per inventory slot, however many
                 // matching stacks the saddlebag holds: the slot is empty after
@@ -230,20 +243,24 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         }
     }
 
-    private static bool HasSaddlebagMatch(InventoryManager* inv, Lumina.Excel.ExcelSheet<Item> itemSheet, uint itemId)
+    /// <summary>Non-unique item ids in the saddlebag, gathered once per click
+    /// rather than rescanning it for every inventory slot.</summary>
+    private static HashSet<uint> CollectSaddlebagItemIds(InventoryManager* inv)
     {
+        var itemSheet = Svc.Data.GetExcelSheet<Item>();
+        var ids = new HashSet<uint>();
         foreach (var saddlebagType in Saddlebag)
         {
             var saddleContainer = inv->GetInventoryContainer(saddlebagType);
             for (var p = 0; p < saddleContainer->Size; p++)
             {
-                var saddleItem = saddleContainer->GetInventorySlot(p);
-                if (saddleItem->ItemId != itemId) continue;
-                if (itemSheet.GetRow(saddleItem->ItemId).IsUnique) continue;
-                return true;
+                var itemId = saddleContainer->GetInventorySlot(p)->ItemId;
+                if (itemId == 0 || ids.Contains(itemId)) continue;
+                if (itemSheet.GetRow(itemId).IsUnique) continue;
+                ids.Add(itemId);
             }
         }
-        return false;
+        return ids;
     }
 
     // Open and select in one task, same as PandorasBox: the ContextMenu addon

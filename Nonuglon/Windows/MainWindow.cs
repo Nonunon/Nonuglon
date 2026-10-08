@@ -1,5 +1,4 @@
 using System;
-using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 
@@ -25,8 +24,8 @@ public class MainWindow : Window, IDisposable
 
         foreach (var tweak in plugin.Tweaks)
         {
-            var color = tweak.Enabled ? new Vector4(0.4f, 0.9f, 0.4f, 1f) : new Vector4(0.6f, 0.6f, 0.6f, 1f);
-            ImGui.TextColored(color, tweak.Enabled ? "\u25cf" : "\u25cb");
+            var (glyph, color) = ConfigWindow.StatusDot(tweak);
+            ImGui.TextColored(color, glyph);
             ImGui.SameLine();
             ImGui.Text(tweak.Name);
         }

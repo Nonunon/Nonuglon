@@ -72,11 +72,24 @@ public unsafe class NavigateFlag : TweakBase
     // Nothing to set up: all the work is per-run, started from "go".
     protected override void Enable() { }
 
+    // OnPendingStop is deliberately left subscribed: a pathfind still computing
+    // must be stopped once it lands, even with the tweak off. It unsubscribes itself.
     protected override void Disable()
     {
         CancelReadyWait();
         Finish("tweak disabled", quiet: true);
-        Svc.Framework.Update -= OnPendingStop;
+    }
+
+    /// <summary>Plugin unload can't wait for a pending pathfind, and vnavmesh has
+    /// no IPC to cancel one (Nav.PathfindCancelAll reloads the navmesh), so the
+    /// best we can do is stop now and log that it may still start moving.</summary>
+    public override void Dispose()
+    {
+        base.Dispose();
+        if (!watchingPending) return;
+        StopPendingWatch();
+        VnavmeshIpc.Stop();
+        Svc.Log.Warning("[NavFlag] Unloaded while a vnavmesh pathfind was still computing; it may start moving once done (use /vnav stop).");
     }
 
     public override bool HasWarning => Enabled && !VnavmeshIpc.IsLoaded;
@@ -257,26 +270,34 @@ public unsafe class NavigateFlag : TweakBase
         Svc.Log.Debug($"[NavFlag] finished: {reason}");
         var config = Plugin.Configuration;
         var muted = (config.NavigateFlagMuteArrived && reason.StartsWith("arrived"))
-                 || (config.NavigateFlagMuteStopped && reason == "stopped by command");
+                 || (config.NavigateFlagMuteStopped && reason is "stopped by command" or "stopped from config window");
         if (!quiet && !muted) Print($"{Name}: {reason}.");
     }
 
     private const long PendingStopTimeoutMs = 60000;
     private long pendingStopDeadline;
+    private bool watchingPending;
 
     private void WatchPendingPathfind()
     {
         pendingStopDeadline = Environment.TickCount64 + PendingStopTimeoutMs;
+        watchingPending = true;
         Svc.Framework.Update -= OnPendingStop;
         Svc.Framework.Update += OnPendingStop;
     }
 
+    private void StopPendingWatch()
+    {
+        watchingPending = false;
+        Svc.Framework.Update -= OnPendingStop;
+    }
+
     private void OnPendingStop(IFramework framework)
     {
-        if (IsRunning || Environment.TickCount64 > pendingStopDeadline) { Svc.Framework.Update -= OnPendingStop; return; }
+        if (IsRunning || Environment.TickCount64 > pendingStopDeadline) { StopPendingWatch(); return; }
         if (VnavmeshIpc.IsPathfindInProgress()) return;
         VnavmeshIpc.Stop();
-        Svc.Framework.Update -= OnPendingStop;
+        StopPendingWatch();
     }
 
     private void EnterPhase(Phase next)
@@ -622,7 +643,7 @@ public unsafe class NavigateFlag : TweakBase
             config.Save();
         }
         var muteStopped = config.NavigateFlagMuteStopped;
-        if (ImGui.Checkbox("Hide \"stopped by command\" chat message##NavigateFlagDebug", ref muteStopped))
+        if (ImGui.Checkbox("Hide \"stopped\" chat message (command or Stop button)##NavigateFlagDebug", ref muteStopped))
         {
             config.NavigateFlagMuteStopped = muteStopped;
             config.Save();

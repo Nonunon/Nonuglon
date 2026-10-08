@@ -233,12 +233,26 @@ public unsafe class AutoPillion : TweakBase
         }
         else
         {
-            // List order = try order (reorder by removing/re-adding). Removal
+            // List order = try order: OnUpdate rides with the first in-range
+            // match, so higher wins when several are nearby. Moves/removal are
             // deferred past the loop so indices don't shift mid-iteration.
+            var favorites = config.AutoPillionFavorites;
             var removeIndex = -1;
-            for (var i = 0; i < config.AutoPillionFavorites.Count; i++)
+            var moveFrom = -1;
+            var moveTo = -1;
+            for (var i = 0; i < favorites.Count; i++)
             {
-                var favorite = config.AutoPillionFavorites[i];
+                var favorite = favorites[i];
+
+                ImGui.BeginDisabled(i == 0);
+                if (ImGui.ArrowButton($"##AutoPillionFavoriteUp{i}", ImGuiDir.Up)) (moveFrom, moveTo) = (i, i - 1);
+                ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Move up (tried first when several favorites are in range).");
+                ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+                ImGui.BeginDisabled(i == favorites.Count - 1);
+                if (ImGui.ArrowButton($"##AutoPillionFavoriteDown{i}", ImGuiDir.Down)) (moveFrom, moveTo) = (i, i + 1);
+                ImGui.EndDisabled();
+                ImGui.SameLine();
 
                 var favoriteEnabled = favorite.Enabled;
                 if (ImGui.Checkbox($"##AutoPillionFavoriteEnabled{i}", ref favoriteEnabled))
@@ -260,9 +274,14 @@ public unsafe class AutoPillion : TweakBase
                     removeIndex = i;
             }
 
-            if (removeIndex >= 0)
+            if (moveFrom >= 0)
             {
-                config.AutoPillionFavorites.RemoveAt(removeIndex);
+                (favorites[moveFrom], favorites[moveTo]) = (favorites[moveTo], favorites[moveFrom]);
+                config.Save();
+            }
+            else if (removeIndex >= 0)
+            {
+                favorites.RemoveAt(removeIndex);
                 config.Save();
             }
         }
@@ -276,6 +295,16 @@ public unsafe class AutoPillion : TweakBase
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
+    }
+
+    /// <summary>AddFavorite plus a chat line either way, for the context-menu
+    /// paths, which otherwise give no sign the click did anything.</summary>
+    public static void AddFavoriteAndReport(string name, uint worldId)
+    {
+        var label = $"{name}@{WorldLookup.GetName(worldId)}";
+        Print(AddFavorite(name, worldId)
+            ? $"Auto Pillion: added \"{label}\" as a favorite."
+            : $"Auto Pillion: \"{label}\" is already a favorite.");
     }
 
     /// <summary>The one place a favorite gets added, for the config UI, chat
@@ -452,7 +481,7 @@ public unsafe class AutoPillion : TweakBase
                 if (removed > 0)
                 {
                     Plugin.Configuration.Save();
-                    Print($"Auto Pillion: removed \"{name}@{worldInput}\" from favorites.");
+                    Print($"Auto Pillion: removed \"{name}@{removeWorld.Name.ExtractText()}\" from favorites.");
                 }
                 else
                 {

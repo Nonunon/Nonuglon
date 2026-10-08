@@ -19,11 +19,6 @@ public class Configuration : IPluginConfiguration
     /// <summary>When true, Auto Pillion only offers a ride to people in
     /// AutoPillionFavorites, instead of anyone nearby in the party.</summary>
     public bool AutoPillionRestrictToPerson { get; set; } = false;
-    /// <summary>Superseded by AutoPillionFavorites (name+world). Not
-    /// auto-migrated - a bare name has no world to recover; Plugin.cs just logs
-    /// a one-time reminder to re-add these manually.</summary>
-    [Obsolete("Superseded by AutoPillionFavorites. Not auto-migrated - do not read/write this elsewhere.")]
-    public List<string> AutoPillionFavoriteTargets { get; set; } = new();
     /// <summary>Players Auto Pillion offers a ride to when
     /// AutoPillionRestrictToPerson is on, identified by name + home world.</summary>
     public List<AutoPillionFavorite> AutoPillionFavorites { get; set; } = new();
@@ -33,10 +28,6 @@ public class Configuration : IPluginConfiguration
     /// <summary>Same idea for Chat 2's right-click integration (inert if Chat 2
     /// isn't installed), independent of the native context menu above.</summary>
     public bool AutoPillionChat2ContextMenuEnabled { get; set; } = false;
-    /// <summary>Superseded by AutoPillionFavoriteTargets; kept only so an
-    /// existing single-target value survives the one-time migration in Plugin.cs.</summary>
-    [Obsolete("Superseded by AutoPillionFavoriteTargets. Retained for one-time migration only - do not read/write this elsewhere.")]
-    public string AutoPillionTargetName { get; set; } = string.Empty;
     /// <summary>How long (ms) to wait for a mount attempt before retrying -
     /// TaskManager's default ~30s timeout is way too long here.</summary>
     public int AutoPillionRetryTimeoutMs { get; set; } = 2000;
@@ -70,7 +61,7 @@ public class Configuration : IPluginConfiguration
     public float NavigateFlagReadyTimeoutSeconds { get; set; } = 2f;
     /// <summary>Hide the "arrived" chat line (still logged).</summary>
     public bool NavigateFlagMuteArrived { get; set; } = false;
-    /// <summary>Hide the "stopped by command" chat line (still logged).</summary>
+    /// <summary>Hide the "stopped" chat line, from command or Stop button (still logged).</summary>
     public bool NavigateFlagMuteStopped { get; set; } = false;
     /// <summary>Flat (X/Z) distance from the destination that counts as arrived.</summary>
     public float NavigateFlagArriveDistance { get; set; } = 2f;

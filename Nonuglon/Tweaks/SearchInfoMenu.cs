@@ -38,17 +38,16 @@ public sealed unsafe class SearchInfoMenu : TweakBase
 
     public override string[] CommandNames => ["searchinfo", "searchinfomenu"];
 
-    private struct RetainedCharacterData(nint address, int framesRemaining)
+    private readonly record struct RetainedCharacterData(nint Address, long FreeAt)
     {
-        public nint Address = address;
-        public int FramesRemaining = framesRemaining;
-        public readonly unsafe InfoProxyCommonList.CharacterData* Pointer => (InfoProxyCommonList.CharacterData*)Address;
+        public unsafe InfoProxyCommonList.CharacterData* Pointer => (InfoProxyCommonList.CharacterData*)Address;
     }
 
     // How long to keep a native CharacterData buffer alive after handing it to
     // AgentDetail before freeing it - comfortably past the window in which
-    // AgentDetail is still reading from it (~0.5s at 60fps).
-    private const int RetainNativeBufferFrames = 30;
+    // AgentDetail is still reading from it. Wall-clock, not frames, so a high
+    // frame rate can't shorten it.
+    private const long RetainNativeBufferMs = 1000;
 
     private readonly List<RetainedCharacterData> retainedCharacterData = [];
 
@@ -203,26 +202,19 @@ public sealed unsafe class SearchInfoMenu : TweakBase
     {
         var address = Marshal.AllocHGlobal(sizeof(InfoProxyCommonList.CharacterData));
         *(InfoProxyCommonList.CharacterData*)address = data;
-        var retained = new RetainedCharacterData(address, RetainNativeBufferFrames);
+        var retained = new RetainedCharacterData(address, Environment.TickCount64 + RetainNativeBufferMs);
         retainedCharacterData.Add(retained);
         return retained;
     }
 
     private void OnFrameworkUpdate(IFramework framework)
     {
+        var now = Environment.TickCount64;
         for (var i = retainedCharacterData.Count - 1; i >= 0; i--)
         {
-            var retained = retainedCharacterData[i];
-            retained.FramesRemaining--;
-            if (retained.FramesRemaining > 0)
-            {
-                retainedCharacterData[i] = retained;
-            }
-            else
-            {
-                Marshal.FreeHGlobal(retained.Address);
-                retainedCharacterData.RemoveAt(i);
-            }
+            if (now < retainedCharacterData[i].FreeAt) continue;
+            Marshal.FreeHGlobal(retainedCharacterData[i].Address);
+            retainedCharacterData.RemoveAt(i);
         }
 
         if (!Enabled && retainedCharacterData.Count == 0)

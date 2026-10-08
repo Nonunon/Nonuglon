@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using Dalamud.Plugin.Ipc;
 using ECommons.DalamudServices;
 
 namespace Nonuglon.Support;
@@ -12,42 +13,49 @@ public static class VnavmeshIpc
 {
     public static bool IsLoaded => PluginDetection.IsPluginLoaded(PluginDetection.VnavmeshInternalName);
 
-    public static bool IsReady() => Call<bool>("vnavmesh.Nav.IsReady");
-    public static bool IsPathRunning() => Call<bool>("vnavmesh.Path.IsRunning");
-    public static bool IsPathfindInProgress() => Call<bool>("vnavmesh.SimpleMove.PathfindInProgress");
+    // Created once instead of per call: this is hit several times a frame during a run.
+    private static readonly ICallGateSubscriber<bool> isReady = Sub<bool>("vnavmesh.Nav.IsReady");
+    private static readonly ICallGateSubscriber<bool> isPathRunning = Sub<bool>("vnavmesh.Path.IsRunning");
+    private static readonly ICallGateSubscriber<bool> pathfindInProgress = Sub<bool>("vnavmesh.SimpleMove.PathfindInProgress");
+    private static readonly ICallGateSubscriber<Vector3, bool, bool> pathfindAndMoveTo = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, bool>("vnavmesh.SimpleMove.PathfindAndMoveTo");
+    private static readonly ICallGateSubscriber<Vector3?> flagToPoint = Sub<Vector3?>("vnavmesh.Query.Mesh.FlagToPoint");
+    private static readonly ICallGateSubscriber<Vector3, bool, float, Vector3?> pointOnFloor = Svc.PluginInterface.GetIpcSubscriber<Vector3, bool, float, Vector3?>("vnavmesh.Query.Mesh.PointOnFloor");
+    private static readonly ICallGateSubscriber<Vector3, float, float, Vector3?> nearestPointReachable = Svc.PluginInterface.GetIpcSubscriber<Vector3, float, float, Vector3?>("vnavmesh.Query.Mesh.NearestPointReachable");
+    private static readonly ICallGateSubscriber<Vector3, float, bool, bool> isPointOnMesh = Svc.PluginInterface.GetIpcSubscriber<Vector3, float, bool, bool>("vnavmesh.Query.Mesh.IsPointOnMesh");
+    private static readonly ICallGateSubscriber<List<Vector3>> listWaypoints = Sub<List<Vector3>>("vnavmesh.Path.ListWaypoints");
+    private static readonly ICallGateSubscriber<object> stop = Sub<object>("vnavmesh.Path.Stop");
 
-    public static bool PathfindAndMoveTo(Vector3 dest, bool fly) => Call<Vector3, bool, bool>("vnavmesh.SimpleMove.PathfindAndMoveTo", dest, fly);
+    private static ICallGateSubscriber<T> Sub<T>(string name) => Svc.PluginInterface.GetIpcSubscriber<T>(name);
+
+    public static bool IsReady() => Guard("Nav.IsReady", () => isReady.InvokeFunc());
+    public static bool IsPathRunning() => Guard("Path.IsRunning", () => isPathRunning.InvokeFunc());
+    public static bool IsPathfindInProgress() => Guard("SimpleMove.PathfindInProgress", () => pathfindInProgress.InvokeFunc());
+
+    public static bool PathfindAndMoveTo(Vector3 dest, bool fly) => Guard("SimpleMove.PathfindAndMoveTo", () => pathfindAndMoveTo.InvokeFunc(dest, fly));
 
     /// <summary>vnavmesh's own flag pick: the highest floor within 5y of the flag.</summary>
-    public static Vector3? FlagToPoint() => Call<Vector3?>("vnavmesh.Query.Mesh.FlagToPoint");
+    public static Vector3? FlagToPoint() => Guard("Query.Mesh.FlagToPoint", () => flagToPoint.InvokeFunc());
 
     /// <summary>Highest floor below p.Y within halfExtentXZ of p.</summary>
     public static Vector3? PointOnFloor(Vector3 p, bool allowUnlandable, float halfExtentXZ) =>
-        Call<Vector3, bool, float, Vector3?>("vnavmesh.Query.Mesh.PointOnFloor", p, allowUnlandable, halfExtentXZ);
+        Guard("Query.Mesh.PointOnFloor", () => pointOnFloor.InvokeFunc(p, allowUnlandable, halfExtentXZ));
 
     /// <summary>Nearest reachable mesh point to p (3D distance) inside the given box.</summary>
     public static Vector3? NearestPointReachable(Vector3 p, float halfExtentXZ, float halfExtentY) =>
-        Call<Vector3, float, float, Vector3?>("vnavmesh.Query.Mesh.NearestPointReachable", p, halfExtentXZ, halfExtentY);
+        Guard("Query.Mesh.NearestPointReachable", () => nearestPointReachable.InvokeFunc(p, halfExtentXZ, halfExtentY));
 
     /// <summary>True if a mesh polygon lies within halfExtentY under/over p;
     /// allowUnreachable false limits it to vnavmesh's flood-filled reachable set.</summary>
     public static bool IsPointOnMesh(Vector3 p, float halfExtentY, bool allowUnreachable) =>
-        Call<Vector3, float, bool, bool>("vnavmesh.Query.Mesh.IsPointOnMesh", p, halfExtentY, allowUnreachable);
+        Guard("Query.Mesh.IsPointOnMesh", () => isPointOnMesh.InvokeFunc(p, halfExtentY, allowUnreachable));
 
-    public static List<Vector3>? ListWaypoints() => Call<List<Vector3>>("vnavmesh.Path.ListWaypoints");
+    public static List<Vector3>? ListWaypoints() => Guard("Path.ListWaypoints", () => listWaypoints.InvokeFunc());
 
     public static void Stop()
     {
-        try { Svc.PluginInterface.GetIpcSubscriber<object>("vnavmesh.Path.Stop").InvokeAction(); }
+        try { stop.InvokeAction(); }
         catch (Exception ex) { Svc.Log.Verbose($"[vnavmesh IPC] Path.Stop failed: {ex.Message}"); }
     }
-
-    private static T? Call<T>(string name) =>
-        Guard(name, () => Svc.PluginInterface.GetIpcSubscriber<T>(name).InvokeFunc());
-    private static T? Call<T1, T2, T>(string name, T1 a, T2 b) =>
-        Guard(name, () => Svc.PluginInterface.GetIpcSubscriber<T1, T2, T>(name).InvokeFunc(a, b));
-    private static T? Call<T1, T2, T3, T>(string name, T1 a, T2 b, T3 c) =>
-        Guard(name, () => Svc.PluginInterface.GetIpcSubscriber<T1, T2, T3, T>(name).InvokeFunc(a, b, c));
 
     private static T? Guard<T>(string name, Func<T> call)
     {

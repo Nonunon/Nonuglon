@@ -20,7 +20,13 @@ internal static class KamiToolKitHost
     {
         started = true;
         Ready = Task.Run(() => KamiToolKitLibrary.InitializeAsync(pluginInterface));
+        // Otherwise a failed init only surfaces at teardown.
+        Ready.ContinueWith(t => Svc.Log.Error(t.Exception!, "KamiToolKit failed to initialize; native UI nodes are unavailable."),
+            TaskContinuationOptions.OnlyOnFaulted);
     }
+
+    /// <summary>True once init has finished and failed (not while still running).</summary>
+    public static bool Failed => Ready.IsFaulted || Ready.IsCanceled;
 
     /// <summary>Call after every tweak using KamiToolKit has been disposed.</summary>
     public static void Dispose()

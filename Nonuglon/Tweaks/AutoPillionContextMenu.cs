@@ -55,6 +55,9 @@ public class AutoPillionContextMenu : IDisposable
         // menus) - excludes NPCs/mobs when present, filtered out entirely.
         if (target.TargetObject is { } obj && obj.ObjectKind != ObjectKind.Pc) return;
 
+        // Only real players carry a home world; items/NPCs in addon menus don't.
+        if (!target.TargetHomeWorld.IsValid || target.TargetHomeWorld.RowId == 0) return;
+
         args.AddMenuItem(menuItem);
     }
 
@@ -66,7 +69,7 @@ public class AutoPillionContextMenu : IDisposable
         var worldId = target.TargetHomeWorld.RowId;
         if (worldId == 0) return;
 
-        AutoPillion.AddFavorite(target.TargetName, worldId);
+        AutoPillion.AddFavoriteAndReport(target.TargetName, worldId);
     }
 
     public void Dispose() => Svc.ContextMenu.OnMenuOpened -= OnMenuOpened;

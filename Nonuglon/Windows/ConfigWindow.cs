@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Nonuglon.Support;
 using Nonuglon.Tweaks;
@@ -15,6 +16,8 @@ public class ConfigWindow : Window, IDisposable
 
     private readonly Plugin plugin;
     private int selectedIndex;
+    // Unscaled units, times ImGuiHelpers.GlobalScale where drawn, so the
+    // sidebar and its drag limits grow with the UI scale.
     private float sidebarWidth = 150f;
 
     public ConfigWindow(Plugin plugin) : base("Nonuglon Tweaks###NonuglonConfig")
@@ -53,7 +56,7 @@ public class ConfigWindow : Window, IDisposable
     /// no changes needed here when a tweak is added.</summary>
     private void DrawSidebar(float height)
     {
-        ImGui.BeginChild("##NonuglonSidebar", new Vector2(sidebarWidth, height), true);
+        ImGui.BeginChild("##NonuglonSidebar", new Vector2(sidebarWidth * ImGuiHelpers.GlobalScale, height), true);
 
         for (var i = 0; i < plugin.Tweaks.Count; i++)
         {
@@ -78,12 +81,12 @@ public class ConfigWindow : Window, IDisposable
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(1f, 1f, 1f, 0.15f));
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(1f, 1f, 1f, 0.25f));
 
-        ImGui.Button("##NonuglonSplitter", new Vector2(SplitterThickness, height));
+        ImGui.Button("##NonuglonSplitter", new Vector2(SplitterThickness * ImGuiHelpers.GlobalScale, height));
 
         ImGui.PopStyleColor(3);
 
         if (ImGui.IsItemActive())
-            sidebarWidth = Math.Clamp(sidebarWidth + ImGui.GetIO().MouseDelta.X, MinSidebarWidth, MaxSidebarWidth);
+            sidebarWidth = Math.Clamp(sidebarWidth + (ImGui.GetIO().MouseDelta.X / ImGuiHelpers.GlobalScale), MinSidebarWidth, MaxSidebarWidth);
 
         if (ImGui.IsItemHovered() || ImGui.IsItemActive())
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEw);
@@ -123,9 +126,9 @@ public class ConfigWindow : Window, IDisposable
     }
 
     /// <summary>Shared status-dot glyph+color so the sidebar and detail pane
-    /// never disagree. Always the same circle glyph (FFXIV's font lacks a
+    /// (and MainWindow) never disagree. Always the same circle glyph (FFXIV's font lacks a
     /// warning-triangle) - warning is conveyed by color alone.</summary>
-    private static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
+    internal static (string Glyph, Vector4 Color) StatusDot(TweakBase tweak)
     {
         if (!tweak.Enabled) return ("\u25cb", UiColors.Disabled);
         return ("\u25cf", tweak.HasWarning ? UiColors.Warning : UiColors.Enabled);
