@@ -57,6 +57,12 @@ public class Configuration : IPluginConfiguration
     /// <summary>Mount id to summon (0 = Mount Roulette). Shared across characters;
     /// one that doesn't own it falls back to roulette.</summary>
     public uint NavigateFlagMountId { get; set; } = 0;
+    /// <summary>Mount while already moving (patch 7.4+) instead of standing still
+    /// until mounted. Off: the old mount-first flow.</summary>
+    public bool NavigateFlagMountWhileMoving { get; set; } = true;
+    /// <summary>Length of the short ground run toward the target while mounting
+    /// for a flight (0 = stand still).</summary>
+    public float NavigateFlagLeadDistance { get; set; } = 15f;
     /// <summary>Re-path flying runs that end beyond the arrive distance.</summary>
     public bool NavigateFlagCorrectFlying { get; set; } = false;
     /// <summary>"go" during a run retargets it to the current flag instead of

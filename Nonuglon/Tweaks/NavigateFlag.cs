@@ -2,12 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using ECommons.DalamudServices;
 using ECommons.GameHelpers;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Nonuglon.Support;
 using static Nonuglon.Support.CommandText;
@@ -64,6 +67,11 @@ public unsafe class NavigateFlag : TweakBase
     private int remounts;
     private bool remounting;
     private bool flying;
+    // Mount-while-moving: a summon in flight during a ground path (mountPending),
+    // or the short ground run issued while mounting for a flight (leadIssued).
+    private bool mountPending;
+    private bool leadIssued;
+    private long mountStartedAt;
     private Vector3 destination;
     private uint runTerritory;
 
@@ -86,6 +94,7 @@ public unsafe class NavigateFlag : TweakBase
     public override void Dispose()
     {
         base.Dispose();
+        CancelFlightPrecompute();
         if (!watchingPending) return;
         StopPendingWatch();
         VnavmeshIpc.Stop();
@@ -142,6 +151,9 @@ public unsafe class NavigateFlag : TweakBase
         corrections = 0;
         remounts = 0;
         remounting = false;
+        mountPending = false;
+        leadIssued = false;
+        leadEnd = null;
         Svc.Framework.Update -= OnUpdate;
         Svc.Framework.Update += OnUpdate;
 
@@ -199,11 +211,117 @@ public unsafe class NavigateFlag : TweakBase
     /// a carried object (conditions 46 / 9), so walk instead.</summary>
     private static bool MustWalk => Svc.Condition[ConditionFlag.Stealthed] || Svc.Condition[ConditionFlag.CarryingObject];
 
+    /// <summary>Mount-first (old flow) stands still in Mounting. Mount-while-moving
+    /// either runs a short way toward the target until mounted (flyable zone, then
+    /// the real flight path replaces it) or starts the ground path at once.</summary>
     private void BeginMounting()
     {
         SummonMount();
         mountRetried = false;
-        EnterPhase(Phase.Mounting);
+        mountStartedAt = Environment.TickCount64;
+
+        if (!Plugin.Configuration.NavigateFlagMountWhileMoving || ZoneLooksFlyable)
+        {
+            EnterPhase(Phase.Mounting);
+            if (!Plugin.Configuration.NavigateFlagMountWhileMoving) return;
+            leadEnd = IssueLead();
+            StartFlightPrecompute(leadEnd ?? Svc.Objects.LocalPlayer?.Position, keepDestination: remounting);
+            return;
+        }
+        mountPending = true;
+        remounting = false;
+        BeginPathing();
+    }
+
+    /// <summary>Flight unlocked here, judged before mounting (Control's own check
+    /// needs a mount). A wrong guess is corrected once mounted.</summary>
+    private static bool ZoneLooksFlyable
+    {
+        get
+        {
+            if (Player.Territory.ValueNullable is not { } territory) return false;
+            var set = territory.AetherCurrentCompFlgSet.RowId;
+            return set != 0 && PlayerState.Instance()->IsAetherCurrentZoneComplete(set);
+        }
+    }
+
+    /// <summary>Ground path a few yalms straight toward the target, so mounting
+    /// doesn't mean standing still. Skipped if no mesh point is near. Returns
+    /// where it ends, or null if none was issued.</summary>
+    private Vector3? IssueLead()
+    {
+        leadIssued = false;
+        var player = Svc.Objects.LocalPlayer;
+        var lead = Plugin.Configuration.NavigateFlagLeadDistance;
+        if (player is null || lead <= 0 || VnavmeshIpc.IsPathfindInProgress()) return null;
+        // Remounting mid-flight already has a destination; a fresh run aims at the flag.
+        Vector2? aim = remounting ? new Vector2(destination.X, destination.Z) : GetFlag();
+        if (aim is not { } target) return null;
+
+        var from = new Vector2(player.Position.X, player.Position.Z);
+        var dist = Vector2.Distance(from, target);
+        if (dist < 1f) return null;
+        var p = from + (target - from) / dist * MathF.Min(lead, dist);
+        if (VnavmeshIpc.NearestPointReachable(new(p.X, player.Position.Y, p.Y), 3f, 10f) is not { } hop) return null;
+
+        leadIssued = VnavmeshIpc.PathfindAndMoveTo(hop, false);
+        Svc.Log.Debug($"[NavFlag] lead run to {hop} ({MathF.Min(lead, dist):F1}y) while mounting, issued={leadIssued}");
+        return leadIssued ? hop : null;
+    }
+
+    // The flight path, computed while mounting from where the lead run ends, so
+    // its first waypoint is ahead of us rather than back where "go" was pressed.
+    private Task<List<Vector3>>? flightTask;
+    private CancellationTokenSource? flightCancel;
+    private Vector3 flightTarget;
+    private Vector3? leadEnd;
+
+    private void StartFlightPrecompute(Vector3? from, bool keepDestination)
+    {
+        CancelFlightPrecompute();
+        if (from is not { } start) return;
+        Vector3 to;
+        if (keepDestination) to = destination;
+        else if (GetFlag() is { } flag && PickDestination(flag, start.Y, true) is { } picked) to = picked;
+        else return;
+
+        flightCancel = new CancellationTokenSource();
+        flightTask = VnavmeshIpc.Pathfind(start, to, true, flightCancel.Token);
+        if (flightTask is null) { CancelFlightPrecompute(); return; }
+        flightTarget = to;
+        Svc.Log.Debug($"[NavFlag] precomputing flight {start} -> {to} while mounting");
+    }
+
+    // Not disposed: vnavmesh may still hold the token, and a plain CTS has nothing to release.
+    private void CancelFlightPrecompute()
+    {
+        flightCancel?.Cancel();
+        flightCancel = null;
+        flightTask = null;
+    }
+
+    /// <summary>Follows the precomputed flight. False (caller pathfinds the
+    /// usual way) if it failed or came back empty.</summary>
+    private bool TakePrecomputedFlight(Task<List<Vector3>> task)
+    {
+        flightTask = null;
+        flightCancel = null;
+        if (!task.IsCompletedSuccessfully || task.Result is not { Count: > 0 } waypoints)
+        {
+            Svc.Log.Debug("[NavFlag] precomputed flight failed or empty, pathfinding from here");
+            return false;
+        }
+
+        flying = true;
+        destination = flightTarget;
+        sawPathRunning = false;
+        issuePending = false;
+        progressPos = Svc.Objects.LocalPlayer?.Position ?? default;
+        progressAt = Environment.TickCount64;
+        EnterPhase(Phase.Pathing);
+        if (!VnavmeshIpc.MoveTo(waypoints, true)) return false;
+        Svc.Log.Debug($"[NavFlag] flying precomputed path ({waypoints.Count} waypoints) to {destination}");
+        return true;
     }
 
     private void BeginPathing()
@@ -224,8 +342,8 @@ public unsafe class NavigateFlag : TweakBase
     }
 
     /// <summary>"go" while a run is active: aim the same run at the current flag,
-    /// like re-sending /vnav flyflag mid-flight. Mounting just carries on, since
-    /// the flag is read fresh once it's done.</summary>
+    /// like re-sending /vnav flyflag mid-flight. Mounting carries on (the flag is
+    /// read fresh once it's done), only a precomputed flight is redone.</summary>
     private void Retarget()
     {
         if (!Plugin.Configuration.NavigateFlagRestartOnGo) { Print($"{Name}: already running, use \"stop\" first.", MessageKind.Failure); return; }
@@ -234,6 +352,7 @@ public unsafe class NavigateFlag : TweakBase
         corrections = 0;
         Svc.Log.Debug("[NavFlag] retargeting to the current flag");
         if (phase == Phase.Pathing) BeginPathing();
+        else if (flightTask is not null) StartFlightPrecompute(leadEnd ?? Svc.Objects.LocalPlayer?.Position, keepDestination: false);
     }
 
     /// <summary>Hands the destination to vnavmesh. No Stop() first: a new path
@@ -257,7 +376,7 @@ public unsafe class NavigateFlag : TweakBase
     {
         if (phase == Phase.Idle) return;
 
-        if (phase == Phase.Pathing)
+        if (phase == Phase.Pathing || leadIssued)
         {
             VnavmeshIpc.Stop();
             // Stop() only clears the current path; a pathfind still computing
@@ -265,6 +384,9 @@ public unsafe class NavigateFlag : TweakBase
             if (VnavmeshIpc.IsPathfindInProgress()) WatchPendingPathfind();
         }
         phase = Phase.Idle;
+        mountPending = false;
+        leadIssued = false;
+        CancelFlightPrecompute();
         Svc.Framework.Update -= OnUpdate;
 
         Svc.Log.Debug($"[NavFlag] finished: {reason}");
@@ -343,11 +465,25 @@ public unsafe class NavigateFlag : TweakBase
     private void TickMounting(long now)
     {
         var elapsed = now - phaseStartedAt;
-        if (Svc.Condition[ConditionFlag.Mounted]) { remounting = false; BeginPathing(); return; }
+        if (Svc.Condition[ConditionFlag.Mounted])
+        {
+            if (flightTask is { } task && Player.CanFly)
+            {
+                // Keep running the lead until the flight is ready (and the lead's own
+                // pathfind has landed, or it would replace the flight).
+                if (!task.IsCompleted || VnavmeshIpc.IsPathfindInProgress()) return;
+                if (TakePrecomputedFlight(task)) { remounting = false; return; }
+            }
+            CancelFlightPrecompute();
+            remounting = false;
+            BeginPathing();
+            return;
+        }
         // Combat (like /vnav) doesn't stop a run, but it does block mounting,
         // so don't sit out the mount timeout.
         if (Svc.Condition[ConditionFlag.InCombat])
         {
+            CancelFlightPrecompute();
             if (remounting) { Finish("dismounted and can't remount in combat"); return; }
             Svc.Log.Debug("[NavFlag] in combat, walking instead of mounting");
             BeginPathing();
@@ -355,6 +491,7 @@ public unsafe class NavigateFlag : TweakBase
         }
         if (elapsed >= MountTimeoutMs)
         {
+            CancelFlightPrecompute();
             if (remounting) { Finish("dismounted and couldn't remount"); return; }
             Svc.Log.Debug("[NavFlag] mount timed out, walking instead");
             BeginPathing();
@@ -367,8 +504,38 @@ public unsafe class NavigateFlag : TweakBase
         }
     }
 
+    /// <summary>A summon started alongside a ground path. Failing just means
+    /// running the rest; landing in a zone that turns out flyable re-paths
+    /// as a flight. Returns true if it re-pathed.</summary>
+    private bool TickPendingMount(long now)
+    {
+        var elapsed = now - mountStartedAt;
+        if (Svc.Condition[ConditionFlag.Mounted])
+        {
+            mountPending = false;
+            if (flying || !Player.CanFly) return false;
+            Svc.Log.Debug("[NavFlag] mounted and flight is allowed after all, flying instead");
+            BeginPathing();
+            return true;
+        }
+        if (Svc.Condition[ConditionFlag.InCombat] || elapsed >= MountTimeoutMs)
+        {
+            mountPending = false;
+            Svc.Log.Debug("[NavFlag] couldn't mount while running, carrying on on foot");
+            return false;
+        }
+        if (!mountRetried && elapsed >= MountRetryAfterMs && Player.CanMount)
+        {
+            SummonMount();
+            mountRetried = true;
+        }
+        return false;
+    }
+
     private void TickPathing(long now, Vector3 playerPos)
     {
+        if (mountPending && TickPendingMount(now)) return;
+
         if (issuePending)
         {
             if (!VnavmeshIpc.IsPathfindInProgress()) IssuePath();
@@ -551,6 +718,28 @@ public unsafe class NavigateFlag : TweakBase
             }
             if (!MountPicker.IsOwned(mountId))
                 ImGui.TextColored(UiColors.Warning, "This character doesn't own that mount, Mount Roulette is used instead.");
+
+            var whileMoving = config.NavigateFlagMountWhileMoving;
+            if (ImGui.Checkbox("Mount while running##NavigateFlag", ref whileMoving))
+            {
+                config.NavigateFlagMountWhileMoving = whileMoving;
+                config.Save();
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Start moving right away and mount on the way. Off: stand still until mounted, then go.");
+
+            if (config.NavigateFlagMountWhileMoving)
+            {
+                var lead = config.NavigateFlagLeadDistance;
+                ImGui.SetNextItemWidth(250f * ImGui.GetIO().FontGlobalScale);
+                if (ImGui.SliderFloat("Run-up before flying (y)##NavigateFlag", ref lead, 0f, 30f, "%.0f"))
+                {
+                    config.NavigateFlagLeadDistance = lead;
+                    config.Save();
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Where you can fly, run this far straight toward the target while the mount comes out, then the flight takes over. 0: stand still.");
+            }
         }
 
         var correctFlying = config.NavigateFlagCorrectFlying;
@@ -720,6 +909,7 @@ public unsafe class NavigateFlag : TweakBase
 
         debugHeader = $"Both vnavmesh and this tweak read the same flag marker (AgentMap.FlagMapMarkers[0]); only the floor pick differs. "
             + $"Flag zone {marker.TerritoryId} vs current {Svc.ClientState.TerritoryType}{(sameZone ? "" : " (DIFFERENT zone, this tweak refuses; vnavmesh doesn't check)")}. "
+            + $"Zone mountable: {Player.CanMount}, flyable (pre-mount guess): {ZoneLooksFlyable}, can fly now: {Player.CanFly}. "
             + (vnavReady ? $"vnavmesh path running: {VnavmeshIpc.IsPathRunning()}." : "vnavmesh not loaded/ready, picks unavailable.");
 
         AddRow("Flag", new(flag.X, float.NaN, flag.Y), reachable: "-", source: "-");

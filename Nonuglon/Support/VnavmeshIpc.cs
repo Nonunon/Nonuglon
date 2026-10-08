@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading;
+using System.Threading.Tasks;
 using Dalamud.Plugin.Ipc;
 using ECommons.DalamudServices;
 
@@ -24,6 +26,9 @@ public static class VnavmeshIpc
     private static readonly ICallGateSubscriber<Vector3, float, bool, bool> isPointOnMesh = Svc.PluginInterface.GetIpcSubscriber<Vector3, float, bool, bool>("vnavmesh.Query.Mesh.IsPointOnMesh");
     private static readonly ICallGateSubscriber<List<Vector3>> listWaypoints = Sub<List<Vector3>>("vnavmesh.Path.ListWaypoints");
     private static readonly ICallGateSubscriber<object> stop = Sub<object>("vnavmesh.Path.Stop");
+    private static readonly ICallGateSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>> pathfindCancelable =
+        Svc.PluginInterface.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>("vnavmesh.Nav.PathfindCancelable");
+    private static readonly ICallGateSubscriber<List<Vector3>, bool, object> moveTo = Svc.PluginInterface.GetIpcSubscriber<List<Vector3>, bool, object>("vnavmesh.Path.MoveTo");
 
     private static ICallGateSubscriber<T> Sub<T>(string name) => Svc.PluginInterface.GetIpcSubscriber<T>(name);
 
@@ -50,6 +55,15 @@ public static class VnavmeshIpc
         Guard("Query.Mesh.IsPointOnMesh", () => isPointOnMesh.InvokeFunc(p, halfExtentY, allowUnreachable));
 
     public static List<Vector3>? ListWaypoints() => Guard("Path.ListWaypoints", () => listWaypoints.InvokeFunc());
+
+    /// <summary>Computes a path without moving (unlike SimpleMove), cancelable
+    /// with our own token, so it doesn't count as SimpleMove.PathfindInProgress.</summary>
+    public static Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly, CancellationToken cancel) =>
+        Guard("Nav.PathfindCancelable", () => pathfindCancelable.InvokeFunc(from, to, fly, cancel));
+
+    /// <summary>Follows the given waypoints, replacing any current path.</summary>
+    public static bool MoveTo(List<Vector3> waypoints, bool fly) =>
+        Guard("Path.MoveTo", () => { moveTo.InvokeAction(waypoints, fly); return true; });
 
     public static void Stop()
     {
