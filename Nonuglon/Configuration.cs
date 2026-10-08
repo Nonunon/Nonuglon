@@ -1,4 +1,5 @@
 ﻿using Dalamud.Configuration;
+using Dalamud.Game.Text;
 using System;
 using System.Collections.Generic;
 
@@ -8,6 +9,14 @@ namespace Nonuglon;
 public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 0;
+
+    // -- General: chat output (see CommandText.Print) --
+    /// <summary>Per message kind: true = chat (and Verbose log), false = /xllog only.</summary>
+    public bool ChatReplies { get; set; } = true;
+    public bool ChatNotices { get; set; } = true;
+    public bool ChatFailures { get; set; } = true;
+    /// <summary>Chat type our messages use; None = Dalamud's own default.</summary>
+    public XivChatType ChatChannel { get; set; } = XivChatType.None;
 
     // -- Tweak toggles --
     // All default false: nothing should activate on a fresh install until the

@@ -175,13 +175,13 @@ public sealed class Plugin : IDalamudPlugin
 
     private void PrintUsage()
     {
-        Print("Usage:");
-        Print("  /Nonuglon - open settings window");
-        Print("  /Nonuglon config | settings - open settings window");
-        Print("  /Nonuglon help | ? - show this list");
+        PrintAlways("Usage:");
+        PrintAlways("  /Nonuglon - open settings window");
+        PrintAlways("  /Nonuglon config | settings - open settings window");
+        PrintAlways("  /Nonuglon help | ? - show this list");
         foreach (var tweak in Tweaks)
             foreach (var line in tweak.UsageLines)
-                Print($"  {line}");
+                PrintAlways($"  {line}");
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();

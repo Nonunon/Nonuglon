@@ -190,6 +190,6 @@ public sealed unsafe class EstateTeleportation : TweakBase
         Svc.Log.Warning($"[{Name}] {message}");
         if (lastReportedFailure == message) return;
         lastReportedFailure = message;
-        Print($"{Name}: {message}");
+        Print($"{Name}: {message}", MessageKind.Failure);
     }
 }

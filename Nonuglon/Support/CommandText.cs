@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Dalamud.Game.Text;
 
 namespace Nonuglon.Support;
 
@@ -37,13 +38,44 @@ public static class CommandText
         return TryParseBool(s, out value);
     }
 
-    /// <summary>Mirrors every chat message to the plugin log at Verbose, so it
-    /// survives scrolling out of the chat window. Debug is reserved for
-    /// no-op messages in ReportStateChange, keeping the two levels distinct.</summary>
-    public static void Print(string message)
+    /// <summary>Sends a message to chat, or only to /xllog if its kind is set to
+    /// that in General settings. Chat messages are mirrored at Verbose so they
+    /// survive scrolling out of chat; xllog-only ones go at Information so they
+    /// show without verbose on. Debug is reserved for ReportStateChange's no-ops.</summary>
+    public static void Print(string message, MessageKind kind = MessageKind.Reply)
     {
-        Plugin.ChatGui.Print($"[Nonuglon] {message}");
+        if (!ShowsInChat(kind))
+        {
+            Plugin.Log.Information(message);
+            return;
+        }
+        PrintToChat(message);
         Plugin.Log.Verbose(message);
+    }
+
+    /// <summary>Always goes to chat, for output the user explicitly asked to
+    /// read (the help list); hiding that would just look broken.</summary>
+    public static void PrintAlways(string message)
+    {
+        PrintToChat(message);
+        Plugin.Log.Verbose(message);
+    }
+
+    private static bool ShowsInChat(MessageKind kind) => kind switch
+    {
+        MessageKind.Notice => Plugin.Configuration.ChatNotices,
+        MessageKind.Failure => Plugin.Configuration.ChatFailures,
+        _ => Plugin.Configuration.ChatReplies,
+    };
+
+    /// <summary>ChatChannel None means Dalamud's own default chat type.</summary>
+    private static void PrintToChat(string message)
+    {
+        var channel = Plugin.Configuration.ChatChannel;
+        if (channel == XivChatType.None)
+            Plugin.ChatGui.Print($"[Nonuglon] {message}");
+        else
+            Plugin.ChatGui.Print(new XivChatEntry { Message = $"[Nonuglon] {message}", Type = channel });
     }
 
     /// <summary>Prints only if the value actually changed; a no-op goes to the
@@ -60,4 +92,15 @@ public static class CommandText
     /// by every boolean tweak toggle.</summary>
     public static void ReportStateChange(string label, bool previousValue, bool newValue) =>
         ReportStateChange(previousValue, newValue, $"{label} {(newValue ? "enabled" : "disabled")}.");
+}
+
+/// <summary>What a chat message is, for General settings' chat-or-xllog choice.</summary>
+public enum MessageKind
+{
+    /// <summary>Answer to something the user just did (command, menu click, button).</summary>
+    Reply,
+    /// <summary>Something that happened on its own, e.g. Navigate to Flag arriving.</summary>
+    Notice,
+    /// <summary>Something that went wrong or was refused.</summary>
+    Failure,
 }

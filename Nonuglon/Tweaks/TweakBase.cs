@@ -1,5 +1,6 @@
 using System;
 using ECommons.DalamudServices;
+using Nonuglon.Support;
 using static Nonuglon.Support.CommandText;
 
 namespace Nonuglon.Tweaks;
@@ -42,7 +43,7 @@ public abstract class TweakBase : IDisposable
         var previous = Enabled;
         SetEnabled(enabled);
         if (enabled && !Enabled)
-            Print($"{Name}: failed to enable, see /xllog for details.");
+            Print($"{Name}: failed to enable, see /xllog for details.", MessageKind.Failure);
         else
             ReportStateChange(Name, previous, Enabled);
     }

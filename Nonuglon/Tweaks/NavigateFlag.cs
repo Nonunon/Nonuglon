@@ -123,7 +123,7 @@ public unsafe class NavigateFlag : TweakBase
             Retarget();
             return;
         }
-        if (!VnavmeshIpc.IsLoaded) { Print($"{Name}: vnavmesh isn't loaded."); return; }
+        if (!VnavmeshIpc.IsLoaded) { Print($"{Name}: vnavmesh isn't loaded.", MessageKind.Failure); return; }
         if (!VnavmeshIpc.IsReady())
         {
             if (!readyWaiting) BeginReadyWait();
@@ -132,11 +132,11 @@ public unsafe class NavigateFlag : TweakBase
         if (VnavmeshIpc.IsPathRunning() || VnavmeshIpc.IsPathfindInProgress())
         {
             // Someone else (another plugin, a manual /vnav) is driving; don't fight it.
-            Print($"{Name}: vnavmesh is already busy.");
+            Print($"{Name}: vnavmesh is already busy.", MessageKind.Failure);
             return;
         }
-        if (Svc.Objects.LocalPlayer is null) { Print($"{Name}: not available right now."); return; }
-        if (GetFlag() is null) { Print($"{Name}: no flag set in this zone."); return; }
+        if (Svc.Objects.LocalPlayer is null) { Print($"{Name}: not available right now.", MessageKind.Failure); return; }
+        if (GetFlag() is null) { Print($"{Name}: no flag set in this zone.", MessageKind.Failure); return; }
 
         runTerritory = Svc.ClientState.TerritoryType;
         corrections = 0;
@@ -191,7 +191,7 @@ public unsafe class NavigateFlag : TweakBase
         else if (now >= readyDeadline)
         {
             CancelReadyWait();
-            Print($"{Name}: vnavmesh's navmesh isn't ready yet.");
+            Print($"{Name}: vnavmesh's navmesh isn't ready yet.", MessageKind.Failure);
         }
     }
 
@@ -228,8 +228,8 @@ public unsafe class NavigateFlag : TweakBase
     /// the flag is read fresh once it's done.</summary>
     private void Retarget()
     {
-        if (!Plugin.Configuration.NavigateFlagRestartOnGo) { Print($"{Name}: already running, use \"stop\" first."); return; }
-        if (GetFlag() is null) { Print($"{Name}: no flag set in this zone, keeping the current run."); return; }
+        if (!Plugin.Configuration.NavigateFlagRestartOnGo) { Print($"{Name}: already running, use \"stop\" first.", MessageKind.Failure); return; }
+        if (GetFlag() is null) { Print($"{Name}: no flag set in this zone, keeping the current run.", MessageKind.Failure); return; }
 
         corrections = 0;
         Svc.Log.Debug("[NavFlag] retargeting to the current flag");
@@ -269,9 +269,12 @@ public unsafe class NavigateFlag : TweakBase
 
         Svc.Log.Debug($"[NavFlag] finished: {reason}");
         var config = Plugin.Configuration;
-        var muted = (config.NavigateFlagMuteArrived && reason.StartsWith("arrived"))
-                 || (config.NavigateFlagMuteStopped && reason is "stopped by command" or "stopped from config window");
-        if (!quiet && !muted) Print($"{Name}: {reason}.");
+        var arrived = reason.StartsWith("arrived");
+        var stopped = reason is "stopped by command" or "stopped from config window";
+        var muted = (config.NavigateFlagMuteArrived && arrived) || (config.NavigateFlagMuteStopped && stopped);
+        // Arriving happens on its own, a stop answers the user, anything else went wrong.
+        var kind = arrived ? MessageKind.Notice : stopped ? MessageKind.Reply : MessageKind.Failure;
+        if (!quiet && !muted) Print($"{Name}: {reason}.", kind);
     }
 
     private const long PendingStopTimeoutMs = 60000;

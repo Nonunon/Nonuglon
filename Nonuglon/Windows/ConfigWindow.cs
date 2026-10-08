@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Nonuglon.Support;
@@ -13,6 +14,9 @@ public class ConfigWindow : Window, IDisposable
     private const float SplitterThickness = 6f;
     private const float MinSidebarWidth = 90f;
     private const float MaxSidebarWidth = 260f;
+
+    // selectedIndex value for the pinned General row above the tweaks.
+    private const int GeneralIndex = -1;
 
     private readonly Plugin plugin;
     private int selectedIndex;
@@ -40,7 +44,7 @@ public class ConfigWindow : Window, IDisposable
             return;
         }
 
-        selectedIndex = Math.Clamp(selectedIndex, 0, plugin.Tweaks.Count - 1);
+        selectedIndex = Math.Clamp(selectedIndex, GeneralIndex, plugin.Tweaks.Count - 1);
 
         // Same row, same explicit height, so all three panes line up evenly.
         var paneHeight = ImGui.GetContentRegionAvail().Y;
@@ -49,7 +53,8 @@ public class ConfigWindow : Window, IDisposable
         ImGui.SameLine(0, 0);
         DrawSplitter(paneHeight);
         ImGui.SameLine(0, 0);
-        DrawSelectedTweak(plugin.Tweaks[selectedIndex], paneHeight);
+        if (selectedIndex == GeneralIndex) DrawGeneral(paneHeight);
+        else DrawSelectedTweak(plugin.Tweaks[selectedIndex], paneHeight);
     }
 
     /// <summary>Left pane: one row per loaded tweak, driven off plugin.Tweaks -
@@ -57,6 +62,18 @@ public class ConfigWindow : Window, IDisposable
     private void DrawSidebar(float height)
     {
         ImGui.BeginChild("##NonuglonSidebar", new Vector2(sidebarWidth * ImGuiHelpers.GlobalScale, height), true);
+
+        // Pinned General row: a label-less Selectable for the hit area, with the
+        // icon (icon font) and text drawn over it, since one label can't mix fonts.
+        var rowStart = ImGui.GetCursorPos();
+        if (ImGui.Selectable("##sidebarGeneral", selectedIndex == GeneralIndex))
+            selectedIndex = GeneralIndex;
+        ImGui.SetCursorPos(rowStart);
+        using (Plugin.PluginInterface.UiBuilder.IconFontHandle.Push())
+            ImGui.TextUnformatted(FontAwesomeIcon.Cog.ToIconString());
+        ImGui.SameLine();
+        ImGui.TextUnformatted(GeneralSettings.Name);
+        ImGui.Separator();
 
         for (var i = 0; i < plugin.Tweaks.Count; i++)
         {
@@ -90,6 +107,25 @@ public class ConfigWindow : Window, IDisposable
 
         if (ImGui.IsItemHovered() || ImGui.IsItemActive())
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEw);
+    }
+
+    /// <summary>Right pane for the General row, same header layout as a tweak.</summary>
+    private static void DrawGeneral(float height)
+    {
+        ImGui.BeginChild("##NonuglonTweakDetails", new Vector2(0, height), true);
+
+        ImGui.TextColored(UiColors.Header, GeneralSettings.Name);
+        ImGui.Separator();
+        ImGui.Spacing();
+
+        ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+        ImGui.TextDisabled(GeneralSettings.Description);
+        ImGui.PopTextWrapPos();
+        ImGui.Spacing();
+
+        GeneralSettings.Draw();
+
+        ImGui.EndChild();
     }
 
     /// <summary>Right pane: header, description, enable checkbox, then the
