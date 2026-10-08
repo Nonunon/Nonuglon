@@ -9,7 +9,7 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "Add to Auto Pillion" to Chat 2's own right-click menu,
+/// <summary>Adds "Add to Auto Pillion" (or "Remove from") to Chat 2's own right-click menu,
 /// via Chat 2's EzIPC hook (Register/Unregister/Invoke) rather than Dalamud's
 /// normal OnMenuOpened, since Chat 2 renders its own chat log outside the native
 /// addons. SafeWrapper.AnyException means EzIPC.Init leaves Register/Unregister
@@ -41,12 +41,14 @@ public class AutoPillionChat2Ipc : IDisposable
     {
         if (id != currentId || sender is null) return;
 
-        if (ImGui.Selectable($"[{ContextMenuBranding.PrefixChar}] Add to Auto Pillion"))
-        {
-            var worldId = sender.World.RowId;
-            if (worldId != 0)
-                AutoPillion.AddFavoriteAndReport(sender.PlayerName, worldId);
-        }
+        var worldId = sender.World.RowId;
+        if (worldId == 0) return;
+
+        // Same Add/Remove switch as the native menu.
+        var saved = AutoPillion.IsFavorite(sender.PlayerName, worldId);
+        if (!ImGui.Selectable($"[{ContextMenuBranding.PrefixChar}] {(saved ? "Remove from" : "Add to")} Auto Pillion")) return;
+        if (saved) AutoPillion.RemoveFavoriteAndReport(sender.PlayerName, worldId);
+        else AutoPillion.AddFavoriteAndReport(sender.PlayerName, worldId);
     }
 
     public void Dispose()

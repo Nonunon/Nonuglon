@@ -2,7 +2,8 @@ name: Release Nonuglon
 
 # Triggered by pushing a version tag: git tag v1.0.0 && git push origin v1.0.0
 #
-# Builds Release, zips it as "Nonuglon.zip" (fixed name, so repo.json's
+# Refuses to build if the downloaded Dalamud's API level doesn't match the
+# csproj's Dalamud.NET.Sdk major version. Builds Release, zips it as "Nonuglon.zip" (fixed name, so repo.json's
 # .../releases/latest/download/Nonuglon.zip links never change), publishes the
 # GitHub release (before the sync commit, so a rejected push to master can never
 # leave a tag without a release), then syncs
@@ -39,6 +40,22 @@ jobs:
         run: |
           Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
           Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+
+      - name: Check Dalamud matches the SDK's API level
+        shell: pwsh
+        run: |
+          # latest.zip isn't pinned, so when Dalamud ships a new API level before
+          # the csproj's Dalamud.NET.Sdk is bumped (or vice versa), stop here
+          # instead of releasing a build made against the wrong Dalamud.
+          $sdk = Select-String -Path Nonuglon\Nonuglon.csproj -Pattern 'Dalamud\.NET\.Sdk/(\d+)\.' | Select-Object -First 1
+          if (-not $sdk) { throw "Could not find the Dalamud.NET.Sdk version in Nonuglon.csproj" }
+          $sdkApi = [int]$sdk.Matches[0].Groups[1].Value
+          $dll = "$env:AppData\XIVLauncher\addon\Hooks\dev\Dalamud.dll"
+          $dalamudApi = [Reflection.AssemblyName]::GetAssemblyName($dll).Version.Major
+          Write-Host "Dalamud.NET.Sdk API $sdkApi, downloaded Dalamud API $dalamudApi"
+          if ($sdkApi -ne $dalamudApi) {
+            throw "API mismatch: csproj targets Dalamud.NET.Sdk $sdkApi but latest Dalamud is API $dalamudApi. Bump the SDK (or wait for Dalamud) before releasing."
+          }
 
       - name: Resolve version from tag
         id: version

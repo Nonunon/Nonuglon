@@ -185,7 +185,7 @@ public unsafe class AutoPillion : TweakBase
             config.Save();
             SyncIntegrations(tweakEnabled: Enabled);
         }
-        HelpMarker("Adds \"Add to Auto Pillion\" to the right-click menu on the party list, friend list, and chat log (among other places you can right-click a player).");
+        HelpMarker("Adds \"Add to Auto Pillion\" to the right-click menu on the party list, friend list, and chat log (among other places you can right-click a player). Shows \"Remove from Auto Pillion\" instead for someone already saved.");
 
         var chat2Enabled = config.AutoPillionChat2ContextMenuEnabled;
         if (ImGui.Checkbox("Chat 2 Context Menu##AutoPillionChat2ContextMenu", ref chat2Enabled))
@@ -195,7 +195,7 @@ public unsafe class AutoPillion : TweakBase
             SyncIntegrations(tweakEnabled: Enabled);
         }
         HelpMarker(
-            "Right-click a name in Chat 2's own chat log, then look under Integrations for \"Add to Auto Pillion\". Requires the Chat 2 plugin.",
+            "Right-click a name in Chat 2's own chat log, then look under Integrations for \"Add to Auto Pillion\" (or \"Remove from\" for someone already saved). Requires the Chat 2 plugin.",
             warning: chat2Enabled && !PluginDetection.IsPluginLoaded(PluginDetection.Chat2InternalName));
 
         if (chat2Enabled && !PluginDetection.IsPluginLoaded(PluginDetection.Chat2InternalName))
@@ -338,14 +338,37 @@ public unsafe class AutoPillion : TweakBase
     /// since the game's own names are; returns false if it was already saved.</summary>
     public static bool AddFavorite(string name, uint worldId)
     {
-        var favorites = Plugin.Configuration.AutoPillionFavorites;
-        if (favorites.Any(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && f.WorldId == worldId))
-            return false;
+        if (IsFavorite(name, worldId)) return false;
 
-        favorites.Add(new AutoPillionFavorite { Name = name, WorldId = worldId, WorldName = WorldLookup.GetName(worldId) });
+        Plugin.Configuration.AutoPillionFavorites.Add(new AutoPillionFavorite { Name = name, WorldId = worldId, WorldName = WorldLookup.GetName(worldId) });
         Plugin.Configuration.Save();
         return true;
     }
+
+    /// <summary>Same matching as AddFavorite; lets the context menus offer
+    /// Remove instead of Add for someone already saved.</summary>
+    public static bool IsFavorite(string name, uint worldId) =>
+        Plugin.Configuration.AutoPillionFavorites.Any(f => Matches(f, name, worldId));
+
+    /// <summary>Counterpart to AddFavorite, for the chat command and both
+    /// context-menu paths. Returns false if they weren't saved.</summary>
+    public static bool RemoveFavorite(string name, uint worldId)
+    {
+        if (Plugin.Configuration.AutoPillionFavorites.RemoveAll(f => Matches(f, name, worldId)) == 0) return false;
+        Plugin.Configuration.Save();
+        return true;
+    }
+
+    public static void RemoveFavoriteAndReport(string name, uint worldId)
+    {
+        var label = $"{name}@{WorldLookup.GetName(worldId)}";
+        Print(RemoveFavorite(name, worldId)
+            ? $"Auto Pillion: removed \"{label}\" from favorites."
+            : $"Auto Pillion: \"{label}\" wasn't a favorite.");
+    }
+
+    private static bool Matches(AutoPillionFavorite f, string name, uint worldId) =>
+        f.WorldId == worldId && f.Name.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Validates and adds a favorite from the input fields above; the
     /// world must resolve via WorldLookup so a typo can't save an unmatchable
@@ -501,12 +524,8 @@ public unsafe class AutoPillion : TweakBase
                     Print($"Usage: /Nonuglon {CommandNames[0]} target remove <name>@<world>");
                     return;
                 }
-                var removed = WorldLookup.TryFindWorld(worldInput, out var removeWorld)
-                    ? favorites.RemoveAll(f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && f.WorldId == removeWorld.RowId)
-                    : 0;
-                if (removed > 0)
+                if (WorldLookup.TryFindWorld(worldInput, out var removeWorld) && RemoveFavorite(name, removeWorld.RowId))
                 {
-                    Plugin.Configuration.Save();
                     Print($"Auto Pillion: removed \"{name}@{removeWorld.Name.ExtractText()}\" from favorites.");
                 }
                 else

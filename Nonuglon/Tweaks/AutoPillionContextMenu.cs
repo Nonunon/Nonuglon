@@ -7,8 +7,9 @@ using Nonuglon.Support;
 
 namespace Nonuglon.Tweaks;
 
-/// <summary>Adds "Add as Auto Pillion favorite" to the right-click menu on the
-/// party list, friend list, chat log, etc. Ported from HuntTrainAssistant's
+/// <summary>Adds "Add to Auto Pillion" (or "Remove from Auto Pillion" for
+/// someone already saved) to the right-click menu on the party list, friend
+/// list, chat log, etc. Ported from HuntTrainAssistant's
 /// (https://github.com/NightmareXIV/HuntTrainAssistant - a Dalamud plugin, so
 /// bound by Dalamud's own AGPL-3.0 regardless of its lack of a LICENSE file)
 /// ContextMenuManager.cs, trimmed to a favorite name instead of their cross-world
@@ -31,14 +32,22 @@ public class AutoPillionContextMenu : IDisposable
         "ContactList",
     ];
 
-    private readonly MenuItem menuItem;
+    private readonly MenuItem addItem;
+    private readonly MenuItem removeItem;
 
     public AutoPillionContextMenu()
     {
-        menuItem = new MenuItem
+        addItem = new MenuItem
         {
             Name = "Add to Auto Pillion",
-            OnClicked = OnClicked,
+            OnClicked = args => OnClicked(args, AutoPillion.AddFavoriteAndReport),
+            PrefixChar = ContextMenuBranding.PrefixChar,
+            PrefixColor = ContextMenuBranding.PrefixColor,
+        };
+        removeItem = new MenuItem
+        {
+            Name = "Remove from Auto Pillion",
+            OnClicked = args => OnClicked(args, AutoPillion.RemoveFavoriteAndReport),
             PrefixChar = ContextMenuBranding.PrefixChar,
             PrefixColor = ContextMenuBranding.PrefixColor,
         };
@@ -58,10 +67,10 @@ public class AutoPillionContextMenu : IDisposable
         // Only real players carry a home world; items/NPCs in addon menus don't.
         if (!target.TargetHomeWorld.IsValid || target.TargetHomeWorld.RowId == 0) return;
 
-        args.AddMenuItem(menuItem);
+        args.AddMenuItem(AutoPillion.IsFavorite(target.TargetName, target.TargetHomeWorld.RowId) ? removeItem : addItem);
     }
 
-    private void OnClicked(IMenuItemClickedArgs args)
+    private static void OnClicked(IMenuItemClickedArgs args, Action<string, uint> apply)
     {
         if (args.Target is not MenuTargetDefault target || string.IsNullOrEmpty(target.TargetName)) return;
 
@@ -69,7 +78,7 @@ public class AutoPillionContextMenu : IDisposable
         var worldId = target.TargetHomeWorld.RowId;
         if (worldId == 0) return;
 
-        AutoPillion.AddFavoriteAndReport(target.TargetName, worldId);
+        apply(target.TargetName, worldId);
     }
 
     public void Dispose() => Svc.ContextMenu.OnMenuOpened -= OnMenuOpened;
