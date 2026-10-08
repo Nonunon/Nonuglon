@@ -17,4 +17,10 @@
     <PackageReference Include="ECommons" Version="3.2.1.15" />
     <PackageReference Include="KamiToolKit" Version="2.2.55" />
   </ItemGroup>
+
+  <!-- Dev plugins read their icon from images/icon.png next to the DLL;
+       installed (repo) plugins use IconUrl from repo.json instead. -->
+  <ItemGroup>
+    <Content Include="images\icon.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

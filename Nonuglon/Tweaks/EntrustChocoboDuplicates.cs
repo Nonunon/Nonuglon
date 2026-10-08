@@ -70,6 +70,9 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
 
     private static bool UseNativeButton => Plugin.Configuration.EntrustChocoboNativeButton;
 
+    // Falls back to the ImGui button when KamiToolKit failed to initialize.
+    private static bool NativeActive => UseNativeButton && !KamiToolKitHost.Failed;
+
     // Native (KamiToolKit) or ImGui button, per config; the other one is torn down.
     private void ApplyMode()
     {
@@ -162,7 +165,7 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         if (UseNativeButton && KamiToolKitHost.Failed)
         {
             ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
-            ImGui.TextColored(UiColors.Warning, "KamiToolKit failed to initialize (see /xllog), so the native button can't be shown. Turn this off to use the ImGui button.");
+            ImGui.TextDisabled("KamiToolKit failed to initialize (see /xllog), so the ImGui button is being used instead.");
             ImGui.PopTextWrapPos();
         }
 
@@ -173,11 +176,11 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
         ImGui.PopTextWrapPos();
     }
 
-    public override bool HasWarning => Enabled && (!IsAetherBagsAvailable || (UseNativeButton && KamiToolKitHost.Failed));
+    public override bool HasWarning => Enabled && !IsAetherBagsAvailable;
 
     private void Draw()
     {
-        if (UseNativeButton) return;
+        if (NativeActive) return;
 
         var addonPtr = Svc.GameGui.GetAddonByName(AetherBagsSaddlebagAddonName).Address;
         if (addonPtr == nint.Zero) return;
