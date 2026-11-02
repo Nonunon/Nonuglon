@@ -51,6 +51,7 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon autopillion contextmenu <on|off|toggle>  native right-click "Add to Auto Pillion"
 /Nonuglon autopillion chat2menu <on|off|toggle>    same, in Chat 2's own context menu
 /Nonuglon autopillion timeout <ms>                 500-10000 ms
+/Nonuglon autopillion cooldown <ms>                wait after hopping off (default 2500)
 /Nonuglon autopillion target add <name>@<world>
 /Nonuglon autopillion target remove <name>@<world>
 /Nonuglon autopillion target enable <name>@<world>

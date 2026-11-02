@@ -41,12 +41,17 @@ public unsafe class AutoPillion : TweakBase
                 $"/Nonuglon {CommandNames[0]} contextmenu <on|off|toggle>",
                 $"/Nonuglon {CommandNames[0]} chat2menu <on|off|toggle>",
                 $"/Nonuglon {CommandNames[0]} timeout <ms, 500-10000>",
+                $"/Nonuglon {CommandNames[0]} cooldown <ms>",
             ]
             : base.UsageLines;
 
     /// <summary>0 = idle/not attempting. Otherwise, the Environment.TickCount64 at
     /// which the current attempt should be considered timed out.</summary>
     private long attemptExpiresAt;
+
+    /// <summary>Environment.TickCount64 until which no ride is attempted, set
+    /// when a pillion seat is left (AutoPillionHopOffCooldownMs).</summary>
+    private long cooldownUntil;
 
     private const int ScanIntervalMs = 250;
     private long nextScanAt;
@@ -65,14 +70,25 @@ public unsafe class AutoPillion : TweakBase
     protected override void Enable()
     {
         Svc.Framework.Update += OnUpdate;
+        Svc.Condition.ConditionChange += OnConditionChange;
         SyncIntegrations(tweakEnabled: true);
     }
 
     protected override void Disable()
     {
         Svc.Framework.Update -= OnUpdate;
+        Svc.Condition.ConditionChange -= OnConditionChange;
         attemptExpiresAt = 0;
+        cooldownUntil = 0;
         SyncIntegrations(tweakEnabled: false);
+    }
+
+    // Upstream's fix for being re-pillioned the moment you hop off (also
+    // fires when the driver dismounts, where a short wait is harmless).
+    private void OnConditionChange(ConditionFlag flag, bool value)
+    {
+        if (flag == ConditionFlag.RidingPillion && !value)
+            cooldownUntil = Environment.TickCount64 + Math.Max(0, Plugin.Configuration.AutoPillionHopOffCooldownMs);
     }
 
     /// <summary>Creates/tears down the context-menu integrations to match config.
@@ -106,7 +122,7 @@ public unsafe class AutoPillion : TweakBase
             || Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Svc.Condition[ConditionFlag.WatchingCutscene]
             || Svc.Condition[ConditionFlag.WatchingCutscene78])
             return;
-        if (Environment.TickCount64 < nextScanAt) return;
+        if (Environment.TickCount64 < nextScanAt || Environment.TickCount64 < cooldownUntil) return;
         nextScanAt = Environment.TickCount64 + ScanIntervalMs;
 
         // Still waiting on the last attempt - don't spam RidePillion every frame.
@@ -321,6 +337,16 @@ public unsafe class AutoPillion : TweakBase
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("How long to wait for a ride attempt to land before giving up and retrying. Lower = faster remount after dismounting, but more spammy if it keeps missing.");
+
+        // No AlwaysClamp, so Ctrl+click can type a value past the slider's range.
+        var hopOffCooldown = config.AutoPillionHopOffCooldownMs;
+        if (ImGui.SliderInt("Hop-off cooldown (ms)##AutoPillion", ref hopOffCooldown, 0, 10000))
+        {
+            config.AutoPillionHopOffCooldownMs = Math.Max(0, hopOffCooldown);
+            config.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("After you leave a pillion seat, wait this long before hopping on again, so you can get off without being put straight back on. Ctrl+click to type any value.");
     }
 
     /// <summary>AddFavorite plus a chat line either way, for the context-menu
@@ -469,6 +495,20 @@ public unsafe class AutoPillion : TweakBase
                 Plugin.Configuration.AutoPillionRetryTimeoutMs = ms;
                 Plugin.Configuration.Save();
                 ReportStateChange(previousMs, ms, $"Auto Pillion: retry timeout set to {ms}ms.");
+                return;
+            }
+
+            case "cooldown":
+            {
+                if (args.Length < 2 || !int.TryParse(args[1], out var cooldownMs) || cooldownMs < 0)
+                {
+                    Print($"Usage: /Nonuglon {CommandNames[0]} cooldown <ms>");
+                    return;
+                }
+                var previousCooldown = Plugin.Configuration.AutoPillionHopOffCooldownMs;
+                Plugin.Configuration.AutoPillionHopOffCooldownMs = cooldownMs;
+                Plugin.Configuration.Save();
+                ReportStateChange(previousCooldown, cooldownMs, $"Auto Pillion: hop-off cooldown set to {cooldownMs}ms.");
                 return;
             }
 

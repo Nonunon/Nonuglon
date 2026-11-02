@@ -40,6 +40,9 @@ public class Configuration : IPluginConfiguration
     /// <summary>How long (ms) to wait for a mount attempt before retrying -
     /// TaskManager's default ~30s timeout is way too long here.</summary>
     public int AutoPillionRetryTimeoutMs { get; set; } = 2000;
+    /// <summary>How long (ms) to hold off after leaving a pillion seat, so you
+    /// can actually get off without being put straight back on.</summary>
+    public int AutoPillionHopOffCooldownMs { get; set; } = 2500;
 
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = false;
     public bool EntrustChocoboNativeButton { get; set; } = true;
