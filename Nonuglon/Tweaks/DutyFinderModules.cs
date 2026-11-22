@@ -36,6 +36,7 @@ public unsafe class DutyFinderModules : TweakBase
     private static readonly string[] AddonNames = ["ContentsFinder", "RaidFinder"];
     private const string VbmText = "VBM ✓";
     private const string BmrText = "BMR ✓";
+    private const string CompactText = "✓";
     private const float LabelGap = 6f;
     private const float NameMinGap = 20f;
     private const int MaxTextCacheEntries = 4096;
@@ -74,7 +75,9 @@ public unsafe class DutyFinderModules : TweakBase
     private sealed class Label
     {
         public required TextNode Node;
-        public float Width;
+        public required string Text;
+        public float Width, FullWidth, CompactWidth;
+        public bool Compact;
         public sbyte Tag = sbyte.MinValue;
         public Vector2 Position = new(float.NaN);
     }
@@ -271,8 +274,8 @@ public unsafe class DutyFinderModules : TweakBase
             row.Vbm.Node.AttachNode(style, NodePosition.AfterTarget);
             row.Bmr.Node.AttachNode(style, NodePosition.AfterTarget);
             rowNode->Component->UldManager.UpdateDrawNodeList();
-            row.Vbm.Width = Measure(row.Vbm.Node);
-            row.Bmr.Width = Measure(row.Bmr.Node);
+            Measure(row.Vbm);
+            Measure(row.Bmr);
         }
 
         var parent = ((AtkResNode*)row.Vbm.Node)->ParentNode;
@@ -283,10 +286,37 @@ public unsafe class DutyFinderModules : TweakBase
         var height = style->AtkResNode.Height;
         var right = anchor - LabelGap;
 
+        var compact = false;
+        if (Plugin.Configuration.DutyFinderModulesCompact)
+        {
+            var nameRight = nameX + VisualLeftOffset(nameNode) + TextWidth(nameNode);
+            compact = LeftEdge(row, tags, right, false) < nameRight + LabelGap;
+        }
+        SetCompact(row.Vbm, compact);
+        SetCompact(row.Bmr, compact);
+
         Place(row.Vbm, (sbyte)tags.Vbm, VbmColor(tags.Vbm), right, y, height, offset);
-        // Alongside keeps the VBM slot reserved, so BMR tags line up in their own column.
-        var bmrRight = BmrMode == BmrTagMode.Alongside ? right - row.Vbm.Width - LabelGap : right;
-        Place(row.Bmr, (sbyte)tags.Bmr, BmrColor(tags.Bmr), bmrRight, y, height, offset);
+        Place(row.Bmr, (sbyte)tags.Bmr, BmrColor(tags.Bmr), BmrRight(right, row.Vbm.Width), y, height, offset);
+    }
+
+    // Alongside keeps the VBM slot reserved, so BMR tags line up in their own column.
+    private static float BmrRight(float right, float vbmWidth) => BmrMode == BmrTagMode.Alongside ? right - vbmWidth - LabelGap : right;
+
+    private static float LeftEdge(RowLabels row, DutyTags tags, float right, bool compact)
+    {
+        var vbmWidth = compact ? row.Vbm.CompactWidth : row.Vbm.FullWidth;
+        var left = tags.Vbm != VbmTag.None ? right - vbmWidth : right;
+        if (tags.Bmr != BmrTag.None)
+            left = Math.Min(left, BmrRight(right, vbmWidth) - (compact ? row.Bmr.CompactWidth : row.Bmr.FullWidth));
+        return left;
+    }
+
+    private static void SetCompact(Label label, bool compact)
+    {
+        if (label.Compact == compact) return;
+        label.Compact = compact;
+        label.Node.String = compact ? CompactText : label.Text;
+        label.Width = compact ? label.CompactWidth : label.FullWidth;
     }
 
     private static void Place(Label label, sbyte tag, Vector4 color, float right, float y, ushort height, Vector2 parentOffset)
@@ -327,6 +357,7 @@ public unsafe class DutyFinderModules : TweakBase
 
     private static Label CreateLabel(AtkTextNode* style, string text) => new()
     {
+        Text = text,
         Node = new TextNode
         {
             String = text,
@@ -339,10 +370,20 @@ public unsafe class DutyFinderModules : TweakBase
         },
     };
 
-    private static float Measure(TextNode node)
+    private static void Measure(Label label)
     {
-        var width = node.GetTextDrawSize(false).X;
-        return width > 0 ? width : 48f;
+        var full = label.Node.GetTextDrawSize(label.Text, false).X;
+        var compact = label.Node.GetTextDrawSize(CompactText, false).X;
+        label.FullWidth = full > 0 ? full : 48f;
+        label.CompactWidth = compact > 0 ? compact : 12f;
+        label.Width = label.FullWidth;
+    }
+
+    private static float TextWidth(AtkTextNode* text)
+    {
+        ushort width = 0, height = 0;
+        text->GetTextDrawSize(&width, &height);
+        return width;
     }
 
     private void FindName(AtkResNode* first, AtkResNode* ownA, AtkResNode* ownB, ref AtkTextNode* result, ref DutyTags tags, int depth)
@@ -516,6 +557,15 @@ public unsafe class DutyFinderModules : TweakBase
         if (BmrMode != BmrTagMode.Off)
             foreach (var (_, color, meaning) in BmrColors)
                 Legend("BMR", color, meaning);
+
+        var compact = Plugin.Configuration.DutyFinderModulesCompact;
+        if (ImGui.Checkbox("Shrink tags when a long name runs into them##DutyFinderModulesCompact", ref compact))
+        {
+            Plugin.Configuration.DutyFinderModulesCompact = compact;
+            Plugin.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Shows just the colored checkmark on that row, so the name stays readable.");
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
         if (!IsBossModAvailable)

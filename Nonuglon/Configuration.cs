@@ -57,6 +57,8 @@ public class Configuration : IPluginConfiguration
     public bool DutyFinderModulesEnabled { get; set; } = false;
     /// <summary>BossModReborn tags, read from its installed DLL.</summary>
     public BmrTagMode DutyFinderModulesBmr { get; set; } = BmrTagMode.Off;
+    /// <summary>Shrink a row's tags to a bare checkmark when its duty name runs into them.</summary>
+    public bool DutyFinderModulesCompact { get; set; } = false;
 
     public bool NavigateFlagEnabled { get; set; } = false;
     /// <summary>Mount (roulette) before travelling, when allowed.</summary>
