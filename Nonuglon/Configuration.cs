@@ -92,6 +92,17 @@ public class Configuration : IPluginConfiguration
     /// <summary>Flat (X/Z) distance from the destination that counts as arrived.</summary>
     public float NavigateFlagArriveDistance { get; set; } = 2f;
 
+    public bool HotbarClickFeedbackEnabled { get; set; } = false;
+    /// <summary>Only animate while Wrath Combo's Auto-Rotation is on.</summary>
+    public bool HotbarClickFeedbackWrathOnly { get; set; } = true;
+    public bool HotbarClickFeedbackSound { get; set; } = true;
+    /// <summary>Presses per automated action, picked at random in this range.</summary>
+    public int HotbarClickFeedbackPulsesMin { get; set; } = 2;
+    public int HotbarClickFeedbackPulsesMax { get; set; } = 3;
+    /// <summary>Random delay between those presses.</summary>
+    public int HotbarClickFeedbackDelayMinMs { get; set; } = 100;
+    public int HotbarClickFeedbackDelayMaxMs { get; set; } = 200;
+
     /// <summary>Master switch for "Commands" (see Tweaks/Commands.cs). Disables
     /// every mini-tweak's effect without touching their own flags below.</summary>
     public bool CommandsEnabled { get; set; } = false;
