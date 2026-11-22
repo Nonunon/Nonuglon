@@ -23,7 +23,7 @@ namespace Nonuglon.Tweaks;
 public unsafe class DutyFinderModules : TweakBase
 {
     public override string Name => "Duty Finder Modules";
-    public override string Description => "Tags duties in the Duty Finder that Boss Mod has modules for, colored by how complete they are. Requires Boss Mod to be installed and loaded.";
+    public override string Description => "Tags duties in the Duty Finder that Boss Mod has modules for, colored by how complete they are. Can also tag BossModReborn's, read from its installed files. Requires Boss Mod to be installed and loaded.";
 
     public override bool ConfigEnabled
     {
@@ -34,7 +34,8 @@ public unsafe class DutyFinderModules : TweakBase
     public override string[] CommandNames => ["dutyfinder", "vbmtags"];
 
     private static readonly string[] AddonNames = ["ContentsFinder", "RaidFinder"];
-    private const string LabelText = "VBM ✓";
+    private const string VbmText = "VBM ✓";
+    private const string BmrText = "BMR ✓";
     private const float LabelGap = 6f;
     private const float NameMinGap = 20f;
     private const int MaxTextCacheEntries = 4096;
@@ -44,26 +45,57 @@ public unsafe class DutyFinderModules : TweakBase
     private static readonly Vector4 PackColor = new(0.55f, 0.78f, 1f, 1f);
 
     // Ordered by priority: a duty shows the highest tag of any of its modules.
-    private enum Tag : sbyte { None = -1, Complete, Incomplete, Pack }
+    private enum VbmTag : sbyte { None = -1, Complete, Incomplete, Pack }
 
-    private sealed class RowLabel
+    // BMR's own maturity names; a duty shows its least mature module, like BMR does.
+    private enum BmrTag : sbyte { None = -1, WIP, Contributed, Verified, AISupport }
+
+    private static readonly (BmrTag Tag, Vector4 Color, string Meaning)[] BmrColors =
+    [
+        (BmrTag.WIP, new(0.94f, 0.44f, 0.44f, 1f), "work in progress"),
+        (BmrTag.Contributed, new(0.55f, 0.78f, 1f, 1f), "contributed, not verified"),
+        (BmrTag.Verified, new(0.55f, 0.9f, 0.55f, 1f), "verified"),
+        (BmrTag.AISupport, new(0.96f, 0.78f, 0.31f, 1f), "verified with AI"),
+    ];
+
+    private static readonly (BmrTagMode Mode, string Label, string Tip)[] BmrModes =
+    [
+        (BmrTagMode.Off, "Off", "Only Boss Mod's tags."),
+        (BmrTagMode.Alongside, "Alongside", "A BMR tag next to the VBM one on every duty BossModReborn covers."),
+        (BmrTagMode.OnlyMissing, "Only where VBM has none", "A BMR tag only on duties Boss Mod has no modules for."),
+    ];
+
+    private readonly record struct DutyTags(VbmTag Vbm, BmrTag Bmr)
+    {
+        public static readonly DutyTags None = new(VbmTag.None, BmrTag.None);
+        public bool Any => Vbm != VbmTag.None || Bmr != BmrTag.None;
+    }
+
+    private sealed class Label
     {
         public required TextNode Node;
-        public Tag Tag = Tag.None;
-        public Vector2 Position = new(float.NaN);
         public float Width;
+        public sbyte Tag = sbyte.MinValue;
+        public Vector2 Position = new(float.NaN);
+    }
+
+    private sealed class RowLabels
+    {
+        public required Label Vbm;
+        public required Label Bmr;
     }
 
     private readonly List<AddonController> controllers = [];
-    private readonly Dictionary<nint, Dictionary<nint, RowLabel>> labels = []; // addon -> row -> label
-    private readonly Dictionary<ulong, Tag> textCache = [];
+    private readonly Dictionary<nint, Dictionary<nint, RowLabels>> labels = []; // addon -> row -> labels
+    private readonly Dictionary<ulong, DutyTags> textCache = [];
     private readonly HashSet<nint> visited = [];
-    private Dictionary<string, Tag>? tagsByName;
+    private Dictionary<string, DutyTags>? tagsByName;
     private volatile bool stale = true;
-    private int dutyCount;
+    private int vbmDutyCount, bmrDutyCount;
     private bool wantEnabled;
 
     private static bool IsBossModAvailable => PluginDetection.IsPluginLoaded(PluginDetection.BossModInternalName);
+    private static BmrTagMode BmrMode => Plugin.Configuration.DutyFinderModulesBmr;
 
     protected override void Enable()
     {
@@ -96,7 +128,7 @@ public unsafe class DutyFinderModules : TweakBase
             var controller = new AddonController
             {
                 AddonName = name,
-                OnSetup = _ => stale = true, // re-read vbm each time the window opens
+                OnSetup = _ => stale = true, // re-read the modules each time the window opens
                 OnFinalize = addon => DisposeLabels((nint)addon),
                 OnUpdate = OnUpdate,
             };
@@ -122,27 +154,46 @@ public unsafe class DutyFinderModules : TweakBase
         VisitManager(rows, &addon->UldManager, 0);
     }
 
-    private Dictionary<string, Tag> BuildTags()
+    private Dictionary<string, DutyTags> BuildTags()
     {
-        var names = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
-        var coverage = IsBossModAvailable ? BossModModules.Read() : null;
-        dutyCount = coverage?.Count ?? 0;
-        if (coverage == null) return names;
+        var mode = BmrMode;
+        var vbm = IsBossModAvailable ? BossModModules.Read() : null;
+        var bmr = mode != BmrTagMode.Off ? BmrModules.Read() : null;
+        vbmDutyCount = vbm?.Count ?? 0;
+        bmrDutyCount = bmr?.Count ?? 0;
 
+        var byCfc = new Dictionary<uint, DutyTags>();
+        if (vbm != null)
+            foreach (var (cfc, c) in vbm)
+                byCfc[cfc] = new(c.FromPack > 0 ? VbmTag.Pack : c.Incomplete > 0 ? VbmTag.Incomplete : VbmTag.Complete, BmrTag.None);
+        if (bmr != null)
+        {
+            foreach (var (cfc, maturity) in bmr)
+            {
+                if (!byCfc.TryGetValue(cfc, out var t)) t = DutyTags.None;
+                else if (mode == BmrTagMode.OnlyMissing) continue;
+                byCfc[cfc] = t with { Bmr = Enum.TryParse<BmrTag>(maturity, out var m) ? m : BmrTag.Contributed };
+            }
+        }
+
+        var names = new Dictionary<string, DutyTags>(StringComparer.OrdinalIgnoreCase);
         var sheet = Svc.Data.GetExcelSheet<ContentFinderCondition>();
-        foreach (var (cfc, c) in coverage)
+        foreach (var (cfc, tags) in byCfc)
         {
             if (sheet.GetRowOrDefault(cfc) is not { } row) continue;
             var name = Normalize(row.Name.ExtractText());
             if (name.Length == 0) continue;
-            var tag = c.FromPack > 0 ? Tag.Pack : c.Incomplete > 0 ? Tag.Incomplete : Tag.Complete;
-            names[name] = names.TryGetValue(name, out var existing) && existing > tag ? existing : tag;
+            names[name] = names.TryGetValue(name, out var e)
+                ? new((VbmTag)Math.Max((sbyte)e.Vbm, (sbyte)tags.Vbm), MinBmr(e.Bmr, tags.Bmr))
+                : tags;
         }
         return names;
     }
 
+    private static BmrTag MinBmr(BmrTag a, BmrTag b) => a == BmrTag.None ? b : b == BmrTag.None ? a : (BmrTag)Math.Min((sbyte)a, (sbyte)b);
+
     // Rows are ListItemRenderer components somewhere under the addon; walk until we find them.
-    private void VisitManager(Dictionary<nint, RowLabel> rows, AtkUldManager* manager, int depth)
+    private void VisitManager(Dictionary<nint, RowLabels> rows, AtkUldManager* manager, int depth)
     {
         if (depth > 4) return;
         if (manager->NodeList != null)
@@ -151,7 +202,7 @@ public unsafe class DutyFinderModules : TweakBase
         VisitChain(rows, manager->RootNode, depth, 0);
     }
 
-    private void VisitChain(Dictionary<nint, RowLabel> rows, AtkResNode* first, int depth, int treeDepth)
+    private void VisitChain(Dictionary<nint, RowLabels> rows, AtkResNode* first, int depth, int treeDepth)
     {
         if (treeDepth > 8) return;
         for (var node = first; node != null; node = node->PrevSiblingNode)
@@ -162,7 +213,7 @@ public unsafe class DutyFinderModules : TweakBase
         }
     }
 
-    private void VisitNode(Dictionary<nint, RowLabel> rows, AtkResNode* node, int depth)
+    private void VisitNode(Dictionary<nint, RowLabels> rows, AtkResNode* node, int depth)
     {
         if (node == null || (int)node->Type < 1000) return;
         var componentNode = (AtkComponentNode*)node;
@@ -177,120 +228,157 @@ public unsafe class DutyFinderModules : TweakBase
             VisitManager(rows, &component->UldManager, depth + 1);
     }
 
-    private void UpdateRow(Dictionary<nint, RowLabel> rows, AtkComponentNode* rowNode)
+    private void UpdateRow(Dictionary<nint, RowLabels> rows, AtkComponentNode* rowNode)
     {
         var rowRes = (AtkResNode*)rowNode;
         var first = rowNode->Component->UldManager.RootNode;
-        rows.TryGetValue((nint)rowNode, out var label);
-        AtkResNode* own = label != null ? (AtkResNode*)label.Node : null;
+        rows.TryGetValue((nint)rowNode, out var row);
+        AtkResNode* ownA = row != null ? (AtkResNode*)row.Vbm.Node : null;
+        AtkResNode* ownB = row != null ? (AtkResNode*)row.Bmr.Node : null;
 
         if (first == null || !rowRes->IsVisible())
         {
-            Hide(label);
+            Hide(row);
             return;
         }
 
         AtkTextNode* nameNode = null;
-        var tag = Tag.None;
-        FindName(first, own, ref nameNode, ref tag, 0);
+        var tags = DutyTags.None;
+        FindName(first, ownA, ownB, ref nameNode, ref tags, 0);
         if (nameNode == null)
         {
-            Hide(label);
+            Hide(row);
             return;
         }
 
-        // The label sits just left of whatever comes first after the name
-        // (duty support icon, level text), so it moves with those icons.
+        // Tags sit just left of whatever comes first after the name
+        // (duty support icon, level text), so they move with those icons.
         var nameX = RowRelativeX((AtkResNode*)nameNode, rowNode);
         var anchor = float.MaxValue;
         AtkTextNode* style = null;
         var styleX = float.MaxValue;
         for (var child = first; child != null; child = child->PrevSiblingNode)
-            AccumulateAnchor(child, rowNode, own, nameX + NameMinGap, rowRes->Width * 0.5f, ref anchor, ref style, ref styleX, 0);
+            AccumulateAnchor(child, rowNode, ownA, ownB, nameX + NameMinGap, rowRes->Width * 0.5f, ref anchor, ref style, ref styleX, 0);
         if (anchor == float.MaxValue || style == null)
         {
-            Hide(label);
+            Hide(row);
             return;
         }
 
-        if (label == null)
+        if (row == null)
         {
-            label = rows[(nint)rowNode] = new RowLabel { Node = CreateLabel(style) };
-            label.Node.AttachNode(style, NodePosition.AfterTarget);
+            row = rows[(nint)rowNode] = new RowLabels { Vbm = CreateLabel(style, VbmText), Bmr = CreateLabel(style, BmrText) };
+            row.Vbm.Node.AttachNode(style, NodePosition.AfterTarget);
+            row.Bmr.Node.AttachNode(style, NodePosition.AfterTarget);
             rowNode->Component->UldManager.UpdateDrawNodeList();
-            label.Width = label.Node.GetTextDrawSize(false).X;
-            if (label.Width <= 0) label.Width = 48f;
+            row.Vbm.Width = Measure(row.Vbm.Node);
+            row.Bmr.Width = Measure(row.Bmr.Node);
         }
 
+        var parent = ((AtkResNode*)row.Vbm.Node)->ParentNode;
+        var offset = parent == null || parent == rowRes
+            ? Vector2.Zero
+            : new Vector2(RowRelativeX(parent, rowNode), RowRelativeY(parent, rowNode));
+        var y = RowRelativeY((AtkResNode*)style, rowNode);
+        var height = style->AtkResNode.Height;
+        var right = anchor - LabelGap;
+
+        Place(row.Vbm, (sbyte)tags.Vbm, VbmColor(tags.Vbm), right, y, height, offset);
+        // Alongside keeps the VBM slot reserved, so BMR tags line up in their own column.
+        var bmrRight = BmrMode == BmrTagMode.Alongside ? right - row.Vbm.Width - LabelGap : right;
+        Place(row.Bmr, (sbyte)tags.Bmr, BmrColor(tags.Bmr), bmrRight, y, height, offset);
+    }
+
+    private static void Place(Label label, sbyte tag, Vector4 color, float right, float y, ushort height, Vector2 parentOffset)
+    {
+        if (tag < 0)
+        {
+            if (label.Node.IsVisible) label.Node.IsVisible = false;
+            return;
+        }
         if (label.Tag != tag)
         {
             label.Tag = tag;
-            label.Node.TextColor = tag switch
-            {
-                Tag.Pack => PackColor,
-                Tag.Incomplete => IncompleteColor,
-                _ => CompleteColor,
-            };
+            label.Node.TextColor = color;
         }
-
-        var parent = ((AtkResNode*)label.Node)->ParentNode;
-        var parentIsRow = parent == null || parent == rowRes;
-        var position = new Vector2(
-            anchor - LabelGap - label.Width - (parentIsRow ? 0f : RowRelativeX(parent, rowNode)),
-            RowRelativeY((AtkResNode*)style, rowNode) - (parentIsRow ? 0f : RowRelativeY(parent, rowNode)));
+        var position = new Vector2(right - label.Width, y) - parentOffset;
         if (position != label.Position)
         {
             label.Position = position;
-            label.Node.Size = new Vector2(label.Width, style->AtkResNode.Height);
+            label.Node.Size = new Vector2(label.Width, height);
             label.Node.Position = position;
         }
         if (!label.Node.IsVisible) label.Node.IsVisible = true;
     }
 
-    private static TextNode CreateLabel(AtkTextNode* style) => new()
+    private static Vector4 VbmColor(VbmTag tag) => tag switch
     {
-        String = LabelText,
-        FontType = style->FontType,
-        FontSize = style->FontSize,
-        TextFlags = style->TextFlags,
-        AlignmentType = AlignmentType.Right,
-        TextOutlineColor = new Vector4(style->EdgeColor.R, style->EdgeColor.G, style->EdgeColor.B, style->EdgeColor.A) / 255f,
+        VbmTag.Pack => PackColor,
+        VbmTag.Incomplete => IncompleteColor,
+        _ => CompleteColor,
     };
 
-    private void FindName(AtkResNode* first, AtkResNode* own, ref AtkTextNode* result, ref Tag tag, int depth)
+    private static Vector4 BmrColor(BmrTag tag)
+    {
+        foreach (var (t, color, _) in BmrColors)
+            if (t == tag) return color;
+        return CompleteColor;
+    }
+
+    private static Label CreateLabel(AtkTextNode* style, string text) => new()
+    {
+        Node = new TextNode
+        {
+            String = text,
+            FontType = style->FontType,
+            FontSize = style->FontSize,
+            TextFlags = style->TextFlags,
+            AlignmentType = AlignmentType.Right,
+            TextOutlineColor = new Vector4(style->EdgeColor.R, style->EdgeColor.G, style->EdgeColor.B, style->EdgeColor.A) / 255f,
+            IsVisible = false,
+        },
+    };
+
+    private static float Measure(TextNode node)
+    {
+        var width = node.GetTextDrawSize(false).X;
+        return width > 0 ? width : 48f;
+    }
+
+    private void FindName(AtkResNode* first, AtkResNode* ownA, AtkResNode* ownB, ref AtkTextNode* result, ref DutyTags tags, int depth)
     {
         if (depth > 6) return;
         for (var node = first; node != null && result == null; node = node->PrevSiblingNode)
         {
-            if (node == own || !node->IsVisible()) continue;
+            if (node == ownA || node == ownB || !node->IsVisible()) continue;
 
             if (node->Type == NodeType.Text)
             {
                 var t = LookupText((AtkTextNode*)node);
-                if (t != Tag.None)
+                if (t.Any)
                 {
                     result = (AtkTextNode*)node;
-                    tag = t;
+                    tags = t;
                 }
             }
             else if ((int)node->Type >= 1000)
             {
                 var component = ((AtkComponentNode*)node)->Component;
                 if (component != null && component->UldManager.RootNode != null)
-                    FindName(component->UldManager.RootNode, own, ref result, ref tag, depth + 1);
+                    FindName(component->UldManager.RootNode, ownA, ownB, ref result, ref tags, depth + 1);
             }
             else if (node->ChildNode != null)
             {
-                FindName(node->ChildNode, own, ref result, ref tag, depth + 1);
+                FindName(node->ChildNode, ownA, ownB, ref result, ref tags, depth + 1);
             }
         }
     }
 
     // Runs for every text node of every row each frame, so results are cached by a hash of the raw bytes.
-    private Tag LookupText(AtkTextNode* text)
+    private DutyTags LookupText(AtkTextNode* text)
     {
         var bytes = text->NodeText.AsSpan();
-        if (bytes.IsEmpty) return Tag.None;
+        if (bytes.IsEmpty) return DutyTags.None;
 
         var hash = 14695981039346656037ul;
         foreach (var b in bytes)
@@ -299,22 +387,22 @@ public unsafe class DutyFinderModules : TweakBase
 
         if (textCache.Count >= MaxTextCacheEntries) textCache.Clear();
         var name = Normalize(new ReadOnlySeStringSpan(bytes).ExtractText());
-        var result = tagsByName!.TryGetValue(name, out var t) ? t : Tag.None;
+        var result = tagsByName!.TryGetValue(name, out var t) ? t : DutyTags.None;
         textCache[hash] = result;
         return result;
     }
 
-    private static void AccumulateAnchor(AtkResNode* node, AtkComponentNode* rowNode, AtkResNode* own, float minX, float maxLeafWidth,
+    private static void AccumulateAnchor(AtkResNode* node, AtkComponentNode* rowNode, AtkResNode* ownA, AtkResNode* ownB, float minX, float maxLeafWidth,
         ref float anchor, ref AtkTextNode* style, ref float styleX, int depth)
     {
-        if (node == own || !node->IsVisible() || node->Type is NodeType.Collision or NodeType.NineGrid || (int)node->Type >= 1000)
+        if (node == ownA || node == ownB || !node->IsVisible() || node->Type is NodeType.Collision or NodeType.NineGrid || (int)node->Type >= 1000)
             return;
 
         if (node->Type == NodeType.Res)
         {
             if (depth < 4)
                 for (var child = node->ChildNode; child != null; child = child->PrevSiblingNode)
-                    AccumulateAnchor(child, rowNode, own, minX, maxLeafWidth, ref anchor, ref style, ref styleX, depth + 1);
+                    AccumulateAnchor(child, rowNode, ownA, ownB, minX, maxLeafWidth, ref anchor, ref style, ref styleX, depth + 1);
             return;
         }
 
@@ -364,9 +452,11 @@ public unsafe class DutyFinderModules : TweakBase
         return y;
     }
 
-    private static void Hide(RowLabel? label)
+    private static void Hide(RowLabels? row)
     {
-        if (label != null && label.Node.IsVisible) label.Node.IsVisible = false;
+        if (row == null) return;
+        if (row.Vbm.Node.IsVisible) row.Vbm.Node.IsVisible = false;
+        if (row.Bmr.Node.IsVisible) row.Bmr.Node.IsVisible = false;
     }
 
     // Duty names can carry soft hyphens, zero-width spaces and wrapped whitespace.
@@ -395,9 +485,10 @@ public unsafe class DutyFinderModules : TweakBase
     private void DisposeLabels(nint addon)
     {
         if (!labels.Remove(addon, out var rows)) return;
-        foreach (var (rowPtr, label) in rows)
+        foreach (var (rowPtr, row) in rows)
         {
-            label.Node.Dispose();
+            row.Vbm.Node.Dispose();
+            row.Bmr.Node.Dispose();
             // KamiToolKit only refreshes the row's draw list when its object list is allocated.
             var component = ((AtkComponentNode*)rowPtr)->Component;
             if (component != null) component->UldManager.UpdateDrawNodeList();
@@ -406,25 +497,52 @@ public unsafe class DutyFinderModules : TweakBase
 
     public override void DrawOptions()
     {
-        ImGui.TextColored(CompleteColor, "VBM");
-        ImGui.SameLine();
-        ImGui.TextDisabled("has modules");
-        ImGui.TextColored(IncompleteColor, "VBM");
-        ImGui.SameLine();
-        ImGui.TextDisabled("at least one module is marked incomplete");
-        ImGui.TextColored(PackColor, "VBM");
-        ImGui.SameLine();
-        ImGui.TextDisabled("at least one module comes from a module pack");
+        Legend("VBM", CompleteColor, "has modules");
+        Legend("VBM", IncompleteColor, "at least one module is marked incomplete");
+        Legend("VBM", PackColor, "at least one module comes from a module pack");
+
+        ImGui.TextUnformatted("BossModReborn tags:");
+        foreach (var (mode, label, tip) in BmrModes)
+        {
+            ImGui.SameLine();
+            if (ImGui.RadioButton($"{label}##DutyFinderModulesBmr", BmrMode == mode))
+            {
+                Plugin.Configuration.DutyFinderModulesBmr = mode;
+                Plugin.Configuration.Save();
+                stale = true;
+            }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
+        }
+        if (BmrMode != BmrTagMode.Off)
+            foreach (var (_, color, meaning) in BmrColors)
+                Legend("BMR", color, meaning);
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
         if (!IsBossModAvailable)
-            ImGui.TextColored(UiColors.Warning, "Boss Mod not detected - this tweak has no effect until it's installed and loaded.");
+            ImGui.TextColored(UiColors.Warning, "Boss Mod not detected - VBM tags are off until it's installed and loaded.");
         else if (BossModModules.LastError is { } error)
             ImGui.TextColored(UiColors.Warning, $"Couldn't read Boss Mod's modules: {error}");
         else if (tagsByName != null)
-            ImGui.TextDisabled($"Boss Mod has modules for {dutyCount} duties (read when the Duty Finder last opened).");
+            ImGui.TextDisabled($"Boss Mod has modules for {vbmDutyCount} duties.");
+
+        if (BmrMode != BmrTagMode.Off)
+        {
+            if (BmrModules.LastError is { } bmrError)
+                ImGui.TextColored(UiColors.Warning, $"Couldn't read BossModReborn's modules: {bmrError}");
+            else if (tagsByName != null)
+                ImGui.TextDisabled($"BossModReborn has modules for {bmrDutyCount} duties (read from its installed files, it doesn't need to be running).");
+        }
+        ImGui.TextDisabled("Counts update when the Duty Finder opens.");
         ImGui.PopTextWrapPos();
     }
 
-    public override bool HasWarning => Enabled && (!IsBossModAvailable || BossModModules.LastError != null);
+    private static void Legend(string text, Vector4 color, string meaning)
+    {
+        ImGui.TextColored(color, text);
+        ImGui.SameLine();
+        ImGui.TextDisabled(meaning);
+    }
+
+    public override bool HasWarning => Enabled &&
+        (!IsBossModAvailable || BossModModules.LastError != null || (BmrMode != BmrTagMode.Off && BmrModules.LastError != null));
 }

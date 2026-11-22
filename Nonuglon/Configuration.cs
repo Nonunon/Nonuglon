@@ -55,6 +55,8 @@ public class Configuration : IPluginConfiguration
     public bool EstateTeleportationEnabled { get; set; } = false;
 
     public bool DutyFinderModulesEnabled { get; set; } = false;
+    /// <summary>BossModReborn tags, read from its installed DLL.</summary>
+    public BmrTagMode DutyFinderModulesBmr { get; set; } = BmrTagMode.Off;
 
     public bool NavigateFlagEnabled { get; set; } = false;
     /// <summary>Mount (roulette) before travelling, when allowed.</summary>
@@ -114,6 +116,15 @@ public enum FlyLayerMode
     Nearest,
     Top,
     Ground,
+}
+
+/// <summary>Duty Finder Modules' BossModReborn tags: none, next to every VBM
+/// tag, or only on duties vbm has no modules for.</summary>
+public enum BmrTagMode
+{
+    Off,
+    Alongside,
+    OnlyMissing,
 }
 
 /// <summary>A single Auto Pillion favorite. WorldId is what OnUpdate matches
