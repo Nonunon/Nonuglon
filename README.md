@@ -16,6 +16,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a player from menus such as the party list, chat log, free company, or linkshells (but not the friend list itself) when they are on your friend list and their home world is your current world, opening the estate-teleport window for them directly.
 - **Navigate to Flag** - travels to your map flag via [vnavmesh](https://github.com/awgil/ffxiv_navmesh), mounting on the move (your pick of mount, with a short run-up toward the flag before taking off) and flying when it can, and briefly waits for vnavmesh's navmesh to load if you go too early. Picks its own spot under the flag rather than using `/vnav moveflag`/`flyflag`'s.
+- **Duty Finder Modules** - tags duties in the Duty Finder that [Boss Mod](https://github.com/awgil/ffxiv_bossmod) has modules for, colored by whether any are incomplete or come from a module pack. Requires Boss Mod to be installed. Idea from [BossmodReborn](https://github.com/FFXIV-CombatReborn/BossmodReborn)'s own Duty Finder indicator.
 - **Commands** - a grab-bag of tiny single-setting "mini-tweaks".
   - **Inactive Window FPS Throttle** - a toggle for the game's own "Limit frame rate when client is inactive." System Configuration setting.
   - **Render Toggle** - "Disable 3D world rendering". Shows a "Render Off" entry in the server info bar (click to re-enable) whenever active.
@@ -68,6 +69,8 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon navflag <on|off|toggle>                  alias: flag
 /Nonuglon navflag go                               travel to the flag; while running, retargets to the current flag
 /Nonuglon navflag stop
+
+/Nonuglon dutyfinder <on|off|toggle>               alias: vbmtags
 
 /Nonuglon commands <on|off|toggle>                 master switch for every mini-tweak below
 /Nonuglon commands inactivefps <on|off|toggle>      same as /Nonuglon inactivefps below

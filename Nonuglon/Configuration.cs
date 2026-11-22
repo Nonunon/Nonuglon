@@ -54,6 +54,8 @@ public class Configuration : IPluginConfiguration
 
     public bool EstateTeleportationEnabled { get; set; } = false;
 
+    public bool DutyFinderModulesEnabled { get; set; } = false;
+
     public bool NavigateFlagEnabled { get; set; } = false;
     /// <summary>Mount (roulette) before travelling, when allowed.</summary>
     public bool NavigateFlagUseMount { get; set; } = true;

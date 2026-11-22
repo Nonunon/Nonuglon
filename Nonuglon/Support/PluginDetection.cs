@@ -12,6 +12,7 @@ public static class PluginDetection
 {
     public const string Chat2InternalName = "ChatTwo";
     public const string VnavmeshInternalName = "vnavmesh";
+    public const string BossModInternalName = "BossMod";
 
     private static HashSet<string>? loaded;
     private static bool subscribed;
