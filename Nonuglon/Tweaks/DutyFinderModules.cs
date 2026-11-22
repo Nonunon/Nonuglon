@@ -96,6 +96,7 @@ public unsafe class DutyFinderModules : TweakBase
     private volatile bool stale = true;
     private int vbmDutyCount, bmrDutyCount;
     private bool wantEnabled;
+    private readonly DutyFinderTestingCheck testingCheck = new();
 
     private static bool IsBossModAvailable => PluginDetection.IsPluginLoaded(PluginDetection.BossModInternalName);
     private static bool IsBmrInstalled => PluginDetection.IsPluginInstalled(BmrModules.InternalName);
@@ -108,6 +109,7 @@ public unsafe class DutyFinderModules : TweakBase
         wantEnabled = true;
         stale = true;
         Svc.PluginInterface.ActivePluginsChanged += OnActivePluginsChanged;
+        testingCheck.SetRunning(Plugin.Configuration.DutyFinderModulesTestingCheck);
         KamiToolKitHost.Ready.ContinueWith(_ => Svc.Framework.RunOnFrameworkThread(CreateControllers),
             TaskContinuationOptions.OnlyOnRanToCompletion);
     }
@@ -116,6 +118,7 @@ public unsafe class DutyFinderModules : TweakBase
     {
         wantEnabled = false;
         Svc.PluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
+        testingCheck.SetRunning(false);
         // Disabling a controller runs OnFinalize for an open window, removing its labels.
         foreach (var controller in controllers)
             controller.Dispose();
@@ -572,6 +575,16 @@ public unsafe class DutyFinderModules : TweakBase
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Shows just the colored checkmark on that row, so the name stays readable.");
+
+        var testing = Plugin.Configuration.DutyFinderModulesTestingCheck;
+        if (ImGui.Checkbox("Testing check##DutyFinderModulesTestingCheck", ref testing))
+        {
+            Plugin.Configuration.DutyFinderModulesTestingCheck = testing;
+            Plugin.Configuration.Save();
+            testingCheck.SetRunning(Enabled && testing);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When you pull a boss whose Boss Mod module is marked incomplete, says so in chat with the module's contributors, once per boss per duty. Uses the Notices chat setting.");
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
         if (!IsBossModAvailable)

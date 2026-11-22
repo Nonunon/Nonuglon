@@ -59,6 +59,8 @@ public class Configuration : IPluginConfiguration
     public BmrTagMode DutyFinderModulesBmr { get; set; } = BmrTagMode.Off;
     /// <summary>Shrink a row's tags to a bare checkmark when its duty name runs into them.</summary>
     public bool DutyFinderModulesCompact { get; set; } = false;
+    /// <summary>Say in chat when a boss with an incomplete vbm module is pulled.</summary>
+    public bool DutyFinderModulesTestingCheck { get; set; } = false;
 
     public bool NavigateFlagEnabled { get; set; } = false;
     /// <summary>Mount (roulette) before travelling, when allowed.</summary>

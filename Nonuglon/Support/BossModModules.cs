@@ -10,6 +10,9 @@ namespace Nonuglon.Support;
 /// <summary>Boss Mod (vbm) module coverage of one duty.</summary>
 public readonly record struct DutyCoverage(int Modules, int Incomplete, int FromPack);
 
+/// <summary>One vbm module, as the Testing check needs it.</summary>
+public readonly record struct ModuleDetails(string TypeName, uint NameId, string Contributors, bool Incomplete);
+
 /// <summary>Reads vbm's loaded module registry by reflection, grouped by
 /// ContentFinderCondition row. vbm's IPC only answers "is there a module for
 /// this boss OID", which can't be mapped to a duty. Read-only; any missing
@@ -74,6 +77,59 @@ public static class BossModModules
             byCfc[cfc] = new(c.Modules + 1, c.Incomplete + ((bool)incomplete.GetValue(info)! ? 1 : 0), c.FromPack + (fromPack ? 1 : 0));
         }
         return byCfc;
+    }
+
+    /// <summary>The enabled CFC modules of one duty, by primary actor OID (null
+    /// if vbm can't be read; the reason is in LastError).</summary>
+    public static Dictionary<uint, ModuleDetails>? ReadDuty(uint cfc)
+    {
+        try
+        {
+            var result = ReadDutyInternal(cfc);
+            LastError = null;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            Svc.Log.Warning(ex, "[DutyFinderModules] Couldn't read Boss Mod's module registry.");
+            return null;
+        }
+    }
+
+    private static Dictionary<uint, ModuleDetails> ReadDutyInternal(uint cfc)
+    {
+        if (!DalamudReflector.TryGetDalamudPlugin(PluginDetection.BossModInternalName, out var instance, out _, true, true) || instance == null)
+            throw new InvalidOperationException("Boss Mod isn't loaded.");
+
+        const BindingFlags Static = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        var registry = instance.GetType().Assembly.GetType("BossMod.BossModuleRegistry")
+            ?? throw new MissingMemberException("BossMod.BossModuleRegistry");
+        var infoType = registry.GetNestedType("Info") ?? throw new MissingMemberException("BossModuleRegistry.Info");
+        var modules = registry.GetProperty("RegisteredModules", Static)?.GetValue(null) as IDictionary
+            ?? throw new MissingMemberException("BossModuleRegistry.RegisteredModules");
+
+        var groupType = Field(infoType, "GroupType");
+        var groupId = Field(infoType, "GroupID");
+        var incomplete = Field(infoType, "Incomplete");
+        var moduleType = Field(infoType, "ModuleType");
+        var category = Field(infoType, "Category");
+        var oid = Field(infoType, "PrimaryActorOID");
+        var nameId = Field(infoType, "NameID");
+        var contributors = Field(infoType, "Contributors");
+        var (disabledModules, disabledCategories) = ReadDisabled(registry.GetField("_config", Static)?.GetValue(null));
+
+        var byOid = new Dictionary<uint, ModuleDetails>();
+        foreach (var info in modules.Values)
+        {
+            if (info == null || groupType.GetValue(info)?.ToString() != "CFC" || Convert.ToUInt32(groupId.GetValue(info)) != cfc) continue;
+            var type = moduleType.GetValue(info) as Type;
+            if (type != null && disabledModules.Contains(type.ToString())) continue;
+            if (disabledCategories.Contains(category.GetValue(info)?.ToString() ?? "")) continue;
+            byOid[Convert.ToUInt32(oid.GetValue(info))] = new(type?.Name ?? "?", Convert.ToUInt32(nameId.GetValue(info)),
+                contributors.GetValue(info) as string ?? "", (bool)incomplete.GetValue(info)!);
+        }
+        return byOid;
     }
 
     private static FieldInfo Field(Type t, string name) =>
