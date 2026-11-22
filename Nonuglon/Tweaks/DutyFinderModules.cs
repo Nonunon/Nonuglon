@@ -23,7 +23,7 @@ namespace Nonuglon.Tweaks;
 public unsafe class DutyFinderModules : TweakBase
 {
     public override string Name => "Duty Finder Modules";
-    public override string Description => "Tags duties in the Duty Finder that Boss Mod has modules for, colored by how complete they are. Can also tag BossModReborn's, read from its installed files. Requires Boss Mod to be installed and loaded.";
+    public override string Description => "Tags duties in the Duty Finder that Boss Mod has modules for, colored by how complete they are. Can also tag BossModReborn's, read from its installed files, so it only needs to be installed, not enabled. VBM tags need Boss Mod loaded.";
 
     public override bool ConfigEnabled
     {
@@ -98,7 +98,10 @@ public unsafe class DutyFinderModules : TweakBase
     private bool wantEnabled;
 
     private static bool IsBossModAvailable => PluginDetection.IsPluginLoaded(PluginDetection.BossModInternalName);
-    private static BmrTagMode BmrMode => Plugin.Configuration.DutyFinderModulesBmr;
+    private static bool IsBmrInstalled => PluginDetection.IsPluginInstalled(BmrModules.InternalName);
+    private static bool IsBmrRunning => PluginDetection.IsPluginLoaded(BmrModules.InternalName);
+    // Forced off while BMR isn't installed; the saved choice comes back when it is.
+    private static BmrTagMode BmrMode => IsBmrInstalled ? Plugin.Configuration.DutyFinderModulesBmr : BmrTagMode.Off;
 
     protected override void Enable()
     {
@@ -542,6 +545,8 @@ public unsafe class DutyFinderModules : TweakBase
         Legend("VBM", IncompleteColor, "at least one module is marked incomplete");
         Legend("VBM", PackColor, "at least one module comes from a module pack");
 
+        var bmrInstalled = IsBmrInstalled;
+        ImGui.BeginDisabled(!bmrInstalled);
         ImGui.TextUnformatted("BossModReborn tags:");
         foreach (var (mode, label, tip) in BmrModes)
         {
@@ -552,8 +557,9 @@ public unsafe class DutyFinderModules : TweakBase
                 Plugin.Configuration.Save();
                 stale = true;
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(tip);
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(tip);
         }
+        ImGui.EndDisabled();
         if (BmrMode != BmrTagMode.Off)
             foreach (var (_, color, meaning) in BmrColors)
                 Legend("BMR", color, meaning);
@@ -569,12 +575,19 @@ public unsafe class DutyFinderModules : TweakBase
 
         ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
         if (!IsBossModAvailable)
-            ImGui.TextColored(UiColors.Warning, "Boss Mod not detected - VBM tags are off until it's installed and loaded.");
+            ImGui.TextColored(UiColors.Warning, BmrMode != BmrTagMode.Off
+                ? "Boss Mod isn't loaded, so only BMR tags show until it is."
+                : "Boss Mod isn't loaded, so nothing is tagged until it is.");
         else if (BossModModules.LastError is { } error)
             ImGui.TextColored(UiColors.Warning, $"Couldn't read Boss Mod's modules: {error}");
         else if (tagsByName != null)
             ImGui.TextDisabled($"Boss Mod has modules for {vbmDutyCount} duties.");
 
+        if (!bmrInstalled)
+            ImGui.TextColored(Plugin.Configuration.DutyFinderModulesBmr != BmrTagMode.Off ? UiColors.Warning : UiColors.Disabled,
+                "BossModReborn isn't installed, so BMR tags are off. It only needs to be installed, not enabled.");
+        else if (IsBmrRunning && IsBossModAvailable)
+            ImGui.TextColored(UiColors.Warning, "Boss Mod and BossModReborn are both running. Tags still work, but the two fight each other in game.");
         if (BmrMode != BmrTagMode.Off)
         {
             if (BmrModules.LastError is { } bmrError)
@@ -594,5 +607,8 @@ public unsafe class DutyFinderModules : TweakBase
     }
 
     public override bool HasWarning => Enabled &&
-        (!IsBossModAvailable || BossModModules.LastError != null || (BmrMode != BmrTagMode.Off && BmrModules.LastError != null));
+        (!IsBossModAvailable || BossModModules.LastError != null
+            || (BmrMode != BmrTagMode.Off && BmrModules.LastError != null)
+            || (!IsBmrInstalled && Plugin.Configuration.DutyFinderModulesBmr != BmrTagMode.Off)
+            || (IsBmrRunning && IsBossModAvailable));
 }

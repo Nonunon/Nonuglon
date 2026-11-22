@@ -14,30 +14,33 @@ public static class PluginDetection
     public const string VnavmeshInternalName = "vnavmesh";
     public const string BossModInternalName = "BossMod";
 
-    private static HashSet<string>? loaded;
+    private static HashSet<string>? loaded, installed;
     private static bool subscribed;
 
     /// <summary>Internal name may differ from the plugin installer's display
     /// name - check the manifest if unsure.</summary>
-    public static bool IsPluginLoaded(string internalName) => (loaded ??= Snapshot()).Contains(internalName);
+    public static bool IsPluginLoaded(string internalName) => (loaded ??= Snapshot(true)).Contains(internalName);
 
-    private static HashSet<string> Snapshot()
+    /// <summary>Installed, loaded or not.</summary>
+    public static bool IsPluginInstalled(string internalName) => (installed ??= Snapshot(false)).Contains(internalName);
+
+    private static HashSet<string> Snapshot(bool loadedOnly)
     {
         if (!subscribed)
         {
             Svc.PluginInterface.ActivePluginsChanged += OnActivePluginsChanged;
             subscribed = true;
         }
-        return Svc.PluginInterface.InstalledPlugins.Where(x => x.IsLoaded).Select(x => x.InternalName).ToHashSet();
+        return Svc.PluginInterface.InstalledPlugins.Where(x => !loadedOnly || x.IsLoaded).Select(x => x.InternalName).ToHashSet();
     }
 
-    private static void OnActivePluginsChanged(IActivePluginsChangedEventArgs _) => loaded = null;
+    private static void OnActivePluginsChanged(IActivePluginsChangedEventArgs _) => loaded = installed = null;
 
     /// <summary>Call on plugin unload, before ECommons is disposed.</summary>
     public static void Dispose()
     {
         if (subscribed) Svc.PluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
         subscribed = false;
-        loaded = null;
+        loaded = installed = null;
     }
 }
