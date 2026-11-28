@@ -20,6 +20,7 @@ public unsafe class AutoPillion : TweakBase
 {
     public override string Name => "Auto Pillion";
     public override string Description => "Automatically hops onto a nearby mount with an open pillion seat. Optionally restrict to a saved list of favorite people.";
+    public override TweakCategory Category => TweakCategory.Travel;
 
     public override bool ConfigEnabled
     {

@@ -25,6 +25,7 @@ public unsafe class InstantReturn : TweakBase
 {
     public override string Name => "Quick Return";
     public override string Description => "Calls the Return function directly and unconditionally - a hack that skips the confirmation dialog and fires regardless of whether Return is actually valid right now. Optionally leaves/disbands your party first.";
+    public override TweakCategory Category => TweakCategory.Travel;
 
     public override bool ConfigEnabled
     {

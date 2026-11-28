@@ -14,6 +14,7 @@ public class Commands : TweakBase
 {
     public override string Name => "Commands";
     public override string Description => "A grab-bag of tiny one-setting toggles, too small to need their own tweak. Turning this off disables all of them at once without losing their individual on/off state.";
+    public override TweakCategory Category => TweakCategory.Commands;
 
     public override bool ConfigEnabled
     {

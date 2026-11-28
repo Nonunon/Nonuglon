@@ -24,6 +24,7 @@ public unsafe class HotbarClickFeedback : TweakBase
 {
     public override string Name => "Hotbar Click Feedback";
     public override string Description => "Plays the hotbar button press animation and click sound when an action is used by automation (like Wrath Combo's Auto-Rotation) instead of a real hotbar press.";
+    public override TweakCategory Category => TweakCategory.DutiesAndCombat;
 
     public override bool ConfigEnabled
     {

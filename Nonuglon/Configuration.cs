@@ -19,6 +19,9 @@ public class Configuration : IPluginConfiguration
     /// <summary>Chat type our messages use; None = Dalamud's own default.</summary>
     public XivChatType ChatChannel { get; set; } = XivChatType.None;
 
+    /// <summary>Config window sidebar groups the user has folded shut.</summary>
+    public List<Tweaks.TweakCategory> CollapsedTweakCategories { get; set; } = new();
+
     // -- Tweak toggles --
     // All default false: nothing should activate on a fresh install until the
     // user opts in.

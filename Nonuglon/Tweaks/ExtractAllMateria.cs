@@ -27,6 +27,7 @@ public unsafe class ExtractAllMateria : TweakBase
 {
     public override string Name => "Extract All Materia";
     public override string Description => "Adds an \"Extract All\" button to the Materia Extraction window that extracts materia from every fully spiritbonded item, tab by tab.";
+    public override TweakCategory Category => TweakCategory.Items;
 
     public override bool ConfigEnabled
     {

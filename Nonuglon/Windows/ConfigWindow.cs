@@ -14,6 +14,7 @@ public class ConfigWindow : Window, IDisposable
     private const float SplitterThickness = 6f;
     private const float MinSidebarWidth = 90f;
     private const float MaxSidebarWidth = 260f;
+    private const float CategoryIndent = 10f;
 
     // selectedIndex value for the pinned General row above the tweaks.
     private const int GeneralIndex = -1;
@@ -75,18 +76,48 @@ public class ConfigWindow : Window, IDisposable
         ImGui.TextUnformatted(GeneralSettings.Name);
         ImGui.Separator();
 
-        for (var i = 0; i < plugin.Tweaks.Count; i++)
+        // Grouped by category (enum order), tweaks in Plugin.Tweaks order within
+        // each. Folded groups are saved, so the sidebar opens the way it was left.
+        var config = Plugin.Configuration;
+        ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, CategoryIndent * ImGuiHelpers.GlobalScale);
+        foreach (var category in Enum.GetValues<TweakCategory>())
         {
-            var tweak = plugin.Tweaks[i];
-            var (dotGlyph, dotColor) = StatusDot(tweak);
+            var any = false;
+            for (var i = 0; i < plugin.Tweaks.Count && !any; i++)
+                any = plugin.Tweaks[i].Category == category;
+            if (!any) continue;
 
-            ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
-            if (ImGui.Selectable($"{dotGlyph} {tweak.Name}##sidebar{i}", i == selectedIndex))
-                selectedIndex = i;
+            var open = !config.CollapsedTweakCategories.Contains(category);
+            ImGui.SetNextItemOpen(open);
+            ImGui.PushStyleColor(ImGuiCol.Text, UiColors.Disabled);
+            var nowOpen = ImGui.TreeNodeEx($"{category.DisplayName()}##sidebarCategory{category}", ImGuiTreeNodeFlags.SpanAvailWidth);
             ImGui.PopStyleColor();
+            if (nowOpen != open)
+            {
+                if (nowOpen) config.CollapsedTweakCategories.Remove(category);
+                else config.CollapsedTweakCategories.Add(category);
+                config.Save();
+            }
+            if (!nowOpen) continue;
+
+            for (var i = 0; i < plugin.Tweaks.Count; i++)
+                if (plugin.Tweaks[i].Category == category)
+                    DrawSidebarRow(plugin.Tweaks[i], i);
+            ImGui.TreePop();
         }
+        ImGui.PopStyleVar();
 
         ImGui.EndChild();
+    }
+
+    private void DrawSidebarRow(TweakBase tweak, int index)
+    {
+        var (dotGlyph, dotColor) = StatusDot(tweak);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
+        if (ImGui.Selectable($"{dotGlyph} {tweak.Name}##sidebar{index}", index == selectedIndex))
+            selectedIndex = index;
+        ImGui.PopStyleColor();
     }
 
     /// <summary>Invisible-button divider; dragging adjusts sidebarWidth via

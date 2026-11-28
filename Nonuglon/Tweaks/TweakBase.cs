@@ -13,6 +13,8 @@ public abstract class TweakBase : IDisposable
 {
     public abstract string Name { get; }
     public abstract string Description { get; }
+    /// <summary>Sidebar group the config window lists this tweak under.</summary>
+    public abstract TweakCategory Category { get; }
     public bool Enabled { get; private set; }
 
     /// <summary>Persisted on/off flag, backed by its own Configuration property.

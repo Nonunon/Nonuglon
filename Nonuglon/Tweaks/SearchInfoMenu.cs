@@ -29,6 +29,7 @@ public sealed unsafe class SearchInfoMenu : TweakBase
 {
     public override string Name => "Search Info Menu";
     public override string Description => "Adds \"View Search Info\" to the right-click context menu on other players, opening the game's Search Info window for them directly.";
+    public override TweakCategory Category => TweakCategory.RightClickMenus;
 
     public override bool ConfigEnabled
     {

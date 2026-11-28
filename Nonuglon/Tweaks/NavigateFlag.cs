@@ -28,6 +28,7 @@ public unsafe class NavigateFlag : TweakBase
 {
     public override string Name => "Navigate to Flag";
     public override string Description => "Travels to your map flag using vnavmesh, mounting (and flying) when possible. Requires the vnavmesh plugin.";
+    public override TweakCategory Category => TweakCategory.Travel;
 
     public override bool ConfigEnabled
     {

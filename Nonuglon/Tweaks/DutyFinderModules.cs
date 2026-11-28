@@ -25,6 +25,7 @@ public unsafe class DutyFinderModules : TweakBase
 {
     public override string Name => "Duty Finder Modules";
     public override string Description => "Tags duties in the Duty Finder that Boss Mod has modules for, colored by how complete they are. Can also tag BossModReborn's, read from its installed files, so it only needs to be installed, not enabled. VBM tags need Boss Mod loaded.";
+    public override TweakCategory Category => TweakCategory.DutiesAndCombat;
 
     public override bool ConfigEnabled
     {

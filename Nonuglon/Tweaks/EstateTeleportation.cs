@@ -28,6 +28,7 @@ public sealed unsafe class EstateTeleportation : TweakBase
 {
     public override string Name => "Estate Teleportation";
     public override string Description => "Adds \"Estate Teleportation\" to the right-click context menu on a friend in your party list (and similar list-style menus) sharing your current world, opening the game's own friend estate-teleport window for them directly.";
+    public override TweakCategory Category => TweakCategory.RightClickMenus;
 
     public override bool ConfigEnabled
     {
