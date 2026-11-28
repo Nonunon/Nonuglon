@@ -24,6 +24,8 @@ public class ConfigWindow : Window, IDisposable
     // Unscaled units, times ImGuiHelpers.GlobalScale where drawn, so the
     // sidebar and its drag limits grow with the UI scale.
     private float sidebarWidth = 150f;
+    // Sized to the longest name on the first draw; dragging overrides it after.
+    private bool sidebarFitted;
 
     public ConfigWindow(Plugin plugin) : base("Nonuglon Tweaks###NonuglonConfig")
     {
@@ -46,6 +48,11 @@ public class ConfigWindow : Window, IDisposable
         }
 
         selectedIndex = Math.Clamp(selectedIndex, GeneralIndex, plugin.Tweaks.Count - 1);
+        if (!sidebarFitted)
+        {
+            sidebarWidth = FitSidebarWidth();
+            sidebarFitted = true;
+        }
 
         // Same row, same explicit height, so all three panes line up evenly.
         var paneHeight = ImGui.GetContentRegionAvail().Y;
@@ -110,14 +117,56 @@ public class ConfigWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
+    /// <summary>Label-less Selectable for the hit area, dot and name drawn over it
+    /// (like the General row), so a name too long for the sidebar ends in "..."
+    /// with the full name on hover instead of being cut mid-letter.</summary>
     private void DrawSidebarRow(TweakBase tweak, int index)
     {
         var (dotGlyph, dotColor) = StatusDot(tweak);
+        var rowStart = ImGui.GetCursorPos();
+        var rowWidth = ImGui.GetContentRegionAvail().X;
 
-        ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
-        if (ImGui.Selectable($"{dotGlyph} {tweak.Name}##sidebar{index}", index == selectedIndex))
+        if (ImGui.Selectable($"##sidebar{index}", index == selectedIndex))
             selectedIndex = index;
+        var hovered = ImGui.IsItemHovered();
+
+        ImGui.SetCursorPos(rowStart);
+        ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
+        ImGui.TextUnformatted(dotGlyph);
+        ImGui.SameLine();
+        var shown = FitText(tweak.Name, rowStart.X + rowWidth - ImGui.GetCursorPosX(), out var cut);
+        ImGui.TextUnformatted(shown);
         ImGui.PopStyleColor();
+
+        if (hovered && cut) ImGui.SetTooltip(tweak.Name);
+    }
+
+    private static string FitText(string text, float room, out bool cut)
+    {
+        cut = ImGui.CalcTextSize(text).X > room;
+        if (!cut) return text;
+        for (var n = text.Length - 1; n > 0; n--)
+        {
+            var candidate = text[..n].TrimEnd() + "...";
+            if (ImGui.CalcTextSize(candidate).X <= room) return candidate;
+        }
+        return "...";
+    }
+
+    /// <summary>Widest sidebar row (tweak or category header), so the first
+    /// open shows every name whole. Unscaled units, like sidebarWidth.</summary>
+    private float FitSidebarWidth()
+    {
+        var style = ImGui.GetStyle();
+        var scale = ImGuiHelpers.GlobalScale;
+        var widest = ImGui.CalcTextSize("● " + GeneralSettings.Name).X + ImGui.GetFontSize();
+        foreach (var tweak in plugin.Tweaks)
+        {
+            widest = Math.Max(widest, CategoryIndent * scale + ImGui.CalcTextSize($"● {tweak.Name}").X);
+            widest = Math.Max(widest, ImGui.GetFontSize() + style.FramePadding.X * 2 + ImGui.CalcTextSize(tweak.Category.DisplayName()).X);
+        }
+        var total = widest + style.WindowPadding.X * 2 + style.ScrollbarSize;
+        return Math.Clamp(total / scale, MinSidebarWidth, MaxSidebarWidth);
     }
 
     /// <summary>Invisible-button divider; dragging adjusts sidebarWidth via
