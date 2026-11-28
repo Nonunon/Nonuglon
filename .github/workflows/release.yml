@@ -20,6 +20,11 @@ on:
 permissions:
   contents: write
 
+# Shared with download-count.yml: both commit repo.json to master.
+concurrency:
+  group: repo-json-sync
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-2022

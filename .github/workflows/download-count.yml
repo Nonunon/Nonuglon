@@ -1,0 +1,76 @@
+name: Update download count
+
+# Dalamud shows a custom repo's download count from repo.json's DownloadCount,
+# so this totals every release's Nonuglon.zip downloads (GitHub counts each
+# install/update fetch) and writes it there. Commits only when the number moved.
+# Same Windows runner and ConvertTo-Json handling as release.yml, so the file's
+# formatting doesn't churn between the two.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Shared with release.yml: both commit repo.json to master.
+concurrency:
+  group: repo-json-sync
+  cancel-in-progress: false
+
+jobs:
+  count:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Total release downloads
+        id: total
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # --paginate runs the jq per page, so this sums one number per page.
+          $pages = gh api --paginate "repos/$env:REPO/releases?per_page=100" --jq '[.[].assets[] | select(.name == "Nonuglon.zip") | .download_count] | add // 0'
+          if ($LASTEXITCODE -ne 0) { throw "Could not read releases" }
+          $total = ($pages | ForEach-Object { [int]$_ } | Measure-Object -Sum).Sum
+          Write-Host "Total Nonuglon.zip downloads: $total"
+          "total=$total" >> $env:GITHUB_OUTPUT
+
+      - name: Write DownloadCount into repo.json
+        id: write
+        shell: pwsh
+        env:
+          TOTAL: ${{ steps.total.outputs.total }}
+        run: |
+          # @(...) in and -InputObject out, same as release.yml: Dalamud needs an array.
+          $repo = @(Get-Content repo.json -Raw | ConvertFrom-Json)
+          $entry = $repo[0]
+          $total = [int]$env:TOTAL
+          if ($entry.PSObject.Properties.Name -contains 'DownloadCount') {
+            if ([int]$entry.DownloadCount -eq $total) { Write-Host "Unchanged ($total)."; exit 0 }
+            $entry.DownloadCount = $total
+          } else {
+            $entry | Add-Member -NotePropertyName DownloadCount -NotePropertyValue $total
+          }
+          ConvertTo-Json -InputObject $repo -Depth 5 | Set-Content repo.json
+          "changed=true" >> $env:GITHUB_OUTPUT
+
+      - name: Commit
+        if: steps.write.outputs.changed == 'true'
+        shell: pwsh
+        env:
+          TOTAL: ${{ steps.total.outputs.total }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add repo.json
+          git commit -m "Update repo.json download count to $env:TOTAL"
+          git pull --rebase origin master
+          if ($LASTEXITCODE -ne 0) { throw "Could not rebase onto master" }
+          git push origin HEAD:master
+          if ($LASTEXITCODE -ne 0) { throw "Could not push download count to master" }
