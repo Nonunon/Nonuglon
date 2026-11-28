@@ -48,6 +48,10 @@ public class Configuration : IPluginConfiguration
     public bool EntrustChocoboDuplicatesEnabled { get; set; } = false;
     public bool EntrustChocoboNativeButton { get; set; } = true;
 
+    public bool ExtractAllMateriaEnabled { get; set; } = false;
+    /// <summary>Switch Pandora's Box's own Extract All off (runtime only) while ours is on.</summary>
+    public bool ExtractAllMateriaDisablePandora { get; set; } = true;
+
     public bool SearchInfoMenuEnabled { get; set; } = false;
     /// <summary>Chat 2's right-click integration for View Search Info, same
     /// independent-toggle relationship as AutoPillionChat2ContextMenuEnabled.</summary>

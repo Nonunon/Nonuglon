@@ -98,6 +98,7 @@ public sealed class Plugin : IDalamudPlugin
         Tweaks.Add(new InstantReturn());
         Tweaks.Add(new AutoPillion());
         Tweaks.Add(new EntrustChocoboDuplicates());
+        Tweaks.Add(new ExtractAllMateria());
         Tweaks.Add(new SearchInfoMenu());
         Tweaks.Add(new EstateTeleportation());
         Tweaks.Add(new NavigateFlag());
