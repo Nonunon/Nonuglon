@@ -616,7 +616,11 @@ public unsafe class NavigateFlag : TweakBase
             var mode = Plugin.Configuration.NavigateFlagFlyLayer;
             if (mode == FlyLayerMode.Ground)
             {
-                if (VnavmeshIpc.PointOnFloor(new(flag.X, 1024, flag.Y), false, 1f) is { } ground) return (ground, "walkable ground");
+                // Landable isn't walkable (an island top is landable), so take the
+                // top reachable layer; the landable floor is only a fallback.
+                var reachable = layers.FindIndex(l => l.Reachable);
+                if (reachable >= 0) return (layers[reachable].Pos, $"walkable ground, layer {reachable + 1}/{layers.Count}");
+                if (VnavmeshIpc.PointOnFloor(new(flag.X, 1024, flag.Y), false, 1f) is { } ground) return (ground, "landable floor (none reachable)");
             }
             else if (layers.Count > 0)
             {
