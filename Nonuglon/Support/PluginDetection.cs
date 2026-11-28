@@ -13,6 +13,8 @@ public static class PluginDetection
     public const string Chat2InternalName = "ChatTwo";
     public const string VnavmeshInternalName = "vnavmesh";
     public const string BossModInternalName = "BossMod";
+    public const string PandorasBoxInternalName = "PandorasBox";
+    public const string YesAlreadyInternalName = "YesAlready";
 
     private static HashSet<string>? loaded, installed;
     private static bool subscribed;
