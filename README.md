@@ -13,6 +13,7 @@ My own personal grab-bag of tweaks. Just the handful of things I actually wanted
 - **Quick Return** - fires Return directly. Can optionally leave/disband your party first. Ported from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks) (aka Automaton/CBT)'s `InstantReturn`.
 - **Auto Pillion** - automatically hops onto a nearby mount with an open pillion seat. Can be restricted to a list of "favorite" people, via chat command, the config, or an "Add to / Remove from Auto Pillion" entry (native context menu and/or Chat 2's). Also ported from [ffxiv-bundleoftweaks](https://github.com/Jaksuhn/ffxiv-bundleoftweaks).
 - **Saddlebag Duplicates** - adds a button to the [AetherBags](https://github.com/Zeffuro/AetherBags) saddlebag window that entrusts duplicate items to your chocobo. Requires AetherBags to be installed. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `EntrustChocoboDuplicates` feature.
+- **Extract All Materia** - adds an "Extract All" button to the Materia Extraction window that extracts materia from every fully spiritbonded item. Can switch Pandora's Box's own version off while it's on, so you don't get two buttons. Ported from [PandorasBox](https://github.com/PunishXIV/PandorasBox)'s `ExtractAll` feature.
 - **Search Info Menu** - adds "View Search Info" to the right-click context menu on other players out in the open world, instead of being jailed to the party list or social menus addons.
 - **Estate Teleportation** - adds "Estate Teleportation" to the right-click context menu on a player from menus such as the party list, chat log, free company, or linkshells (but not the friend list itself) when they are on your friend list and their home world is your current world, opening the estate-teleport window for them directly.
 - **Navigate to Flag** - travels to your map flag via [vnavmesh](https://github.com/awgil/ffxiv_navmesh), mounting on the move (your pick of mount, with a short run-up toward the flag before taking off) and flying when it can, and briefly waits for vnavmesh's navmesh to load if you go too early. Picks its own spot under the flag rather than using `/vnav moveflag`/`flyflag`'s.
@@ -62,6 +63,8 @@ Each tweak's own on/off/toggle command always works, but any subcommand beyond t
 /Nonuglon autopillion target clear
 
 /Nonuglon entrustchocobo <on|off|toggle>           aliases: entrust, chocobo
+
+/Nonuglon extractall <on|off|toggle>               alias: materia
 
 /Nonuglon searchinfo <on|off|toggle>
 
