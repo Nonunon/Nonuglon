@@ -138,6 +138,8 @@ public unsafe class NavigateFlag : TweakBase
             if (!readyWaiting) BeginReadyWait();
             return;
         }
+        // Ready now: a pending wait would otherwise call Start() again mid-run.
+        if (readyWaiting) CancelReadyWait();
         if (VnavmeshIpc.IsPathRunning() || VnavmeshIpc.IsPathfindInProgress())
         {
             // Someone else (another plugin, a manual /vnav) is driving; don't fight it.
