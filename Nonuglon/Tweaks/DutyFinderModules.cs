@@ -544,7 +544,7 @@ public unsafe class DutyFinderModules : TweakBase
         var pendingSpace = false;
         foreach (var c in s)
         {
-            if (c is '­' or '​') continue;
+            if (c is '\u00AD' or '\u200B') continue;
             if (char.IsWhiteSpace(c))
             {
                 pendingSpace = sb.Length > 0;
