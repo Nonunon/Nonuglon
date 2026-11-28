@@ -26,6 +26,8 @@ public class ConfigWindow : Window, IDisposable
     private float sidebarWidth = 150f;
     // Sized to the longest name on the first draw; dragging overrides it after.
     private bool sidebarFitted;
+    // Sidebar filter text; not saved, so it starts empty each session.
+    private string search = string.Empty;
 
     public ConfigWindow(Plugin plugin) : base("Nonuglon Tweaks###NonuglonConfig")
     {
@@ -83,23 +85,31 @@ public class ConfigWindow : Window, IDisposable
         ImGui.TextUnformatted(GeneralSettings.Name);
         ImGui.Separator();
 
+        // Filters by tweak or category name. While searching every matching group
+        // is shown open, without touching the saved folded state.
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##sidebarSearch", "Search tweaks...", ref search, 64);
+        var searching = search.Trim().Length > 0;
+
         // Grouped by category (enum order), tweaks in Plugin.Tweaks order within
         // each. Folded groups are saved, so the sidebar opens the way it was left.
         var config = Plugin.Configuration;
+        var shownAny = false;
         ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, CategoryIndent * ImGuiHelpers.GlobalScale);
         foreach (var category in Enum.GetValues<TweakCategory>())
         {
             var any = false;
             for (var i = 0; i < plugin.Tweaks.Count && !any; i++)
-                any = plugin.Tweaks[i].Category == category;
+                any = plugin.Tweaks[i].Category == category && MatchesSearch(plugin.Tweaks[i]);
             if (!any) continue;
+            shownAny = true;
 
-            var open = !config.CollapsedTweakCategories.Contains(category);
+            var open = searching || !config.CollapsedTweakCategories.Contains(category);
             ImGui.SetNextItemOpen(open);
             ImGui.PushStyleColor(ImGuiCol.Text, UiColors.Disabled);
             var nowOpen = ImGui.TreeNodeEx($"{category.DisplayName()}##sidebarCategory{category}", ImGuiTreeNodeFlags.SpanAvailWidth);
             ImGui.PopStyleColor();
-            if (nowOpen != open)
+            if (nowOpen != open && !searching)
             {
                 if (nowOpen) config.CollapsedTweakCategories.Remove(category);
                 else config.CollapsedTweakCategories.Add(category);
@@ -108,11 +118,13 @@ public class ConfigWindow : Window, IDisposable
             if (!nowOpen) continue;
 
             for (var i = 0; i < plugin.Tweaks.Count; i++)
-                if (plugin.Tweaks[i].Category == category)
+                if (plugin.Tweaks[i].Category == category && MatchesSearch(plugin.Tweaks[i]))
                     DrawSidebarRow(plugin.Tweaks[i], i);
             ImGui.TreePop();
         }
         ImGui.PopStyleVar();
+
+        if (!shownAny) ImGui.TextDisabled("No matches.");
 
         ImGui.EndChild();
     }
@@ -139,6 +151,14 @@ public class ConfigWindow : Window, IDisposable
         else ImGui.TextColored(UiColors.Disabled, shown);
 
         if (hovered && cut) ImGui.SetTooltip(tweak.Name);
+    }
+
+    private bool MatchesSearch(TweakBase tweak)
+    {
+        var query = search.Trim();
+        return query.Length == 0
+            || tweak.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || tweak.Category.DisplayName().Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FitText(string text, float room, out bool cut)
