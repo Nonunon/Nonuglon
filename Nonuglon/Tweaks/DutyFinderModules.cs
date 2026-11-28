@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
@@ -66,7 +67,8 @@ public unsafe class DutyFinderModules : TweakBase
         (BmrTagMode.OnlyMissing, "Only where VBM has none", "A BMR tag only on duties Boss Mod has no modules for."),
     ];
 
-    private readonly record struct DutyTags(VbmTag Vbm, BmrTag Bmr)
+    // PackRank indexes packColors: the highest-priority pack the duty's modules come from.
+    private readonly record struct DutyTags(VbmTag Vbm, BmrTag Bmr, int PackRank = int.MaxValue)
     {
         public static readonly DutyTags None = new(VbmTag.None, BmrTag.None);
         public bool Any => Vbm != VbmTag.None || Bmr != BmrTag.None;
@@ -78,7 +80,7 @@ public unsafe class DutyFinderModules : TweakBase
         public required string Text;
         public float Width, FullWidth, CompactWidth;
         public bool Compact;
-        public sbyte Tag = sbyte.MinValue;
+        public Vector4 Color = new(float.NaN);
         public Vector2 Position = new(float.NaN);
     }
 
@@ -95,6 +97,9 @@ public unsafe class DutyFinderModules : TweakBase
     private Dictionary<string, DutyTags>? tagsByName;
     private volatile bool stale = true;
     private int vbmDutyCount, bmrDutyCount;
+    private List<Vector4> packColors = []; // by PackRank, from the last BuildTags
+    private DateTime packsReadAt;
+    private bool packSavePending;
     private bool wantEnabled;
     private readonly DutyFinderTestingCheck testingCheck = new();
 
@@ -171,10 +176,21 @@ public unsafe class DutyFinderModules : TweakBase
         vbmDutyCount = vbm?.Count ?? 0;
         bmrDutyCount = bmr?.Count ?? 0;
 
+        var order = PackOrder();
+        var rankOf = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < order.Count; ++i)
+            rankOf.TryAdd(order[i].Pack, i);
+        packColors = order.ConvertAll(p => p.Color);
+
         var byCfc = new Dictionary<uint, DutyTags>();
         if (vbm != null)
             foreach (var (cfc, c) in vbm)
-                byCfc[cfc] = new(c.FromPack > 0 ? VbmTag.Pack : c.Incomplete > 0 ? VbmTag.Incomplete : VbmTag.Complete, BmrTag.None);
+            {
+                var rank = int.MaxValue;
+                foreach (var pack in c.Packs)
+                    if (rankOf.TryGetValue(pack, out var r)) rank = Math.Min(rank, r);
+                byCfc[cfc] = new(c.FromPack > 0 ? VbmTag.Pack : c.Incomplete > 0 ? VbmTag.Incomplete : VbmTag.Complete, BmrTag.None, rank);
+            }
         if (bmr != null)
         {
             foreach (var (cfc, maturity) in bmr)
@@ -193,7 +209,7 @@ public unsafe class DutyFinderModules : TweakBase
             var name = Normalize(row.Name.ExtractText());
             if (name.Length == 0) continue;
             names[name] = names.TryGetValue(name, out var e)
-                ? new((VbmTag)Math.Max((sbyte)e.Vbm, (sbyte)tags.Vbm), MinBmr(e.Bmr, tags.Bmr))
+                ? new((VbmTag)Math.Max((sbyte)e.Vbm, (sbyte)tags.Vbm), MinBmr(e.Bmr, tags.Bmr), Math.Min(e.PackRank, tags.PackRank))
                 : tags;
         }
         return names;
@@ -301,7 +317,7 @@ public unsafe class DutyFinderModules : TweakBase
         SetCompact(row.Vbm, compact);
         SetCompact(row.Bmr, compact);
 
-        Place(row.Vbm, (sbyte)tags.Vbm, VbmColor(tags.Vbm), right, y, height, offset);
+        Place(row.Vbm, (sbyte)tags.Vbm, VbmColor(tags), right, y, height, offset);
         Place(row.Bmr, (sbyte)tags.Bmr, BmrColor(tags.Bmr), BmrRight(right, row.Vbm.Width), y, height, offset);
     }
 
@@ -332,9 +348,9 @@ public unsafe class DutyFinderModules : TweakBase
             if (label.Node.IsVisible) label.Node.IsVisible = false;
             return;
         }
-        if (label.Tag != tag)
+        if (label.Color != color)
         {
-            label.Tag = tag;
+            label.Color = color;
             label.Node.TextColor = color;
         }
         var position = new Vector2(right - label.Width, y) - parentOffset;
@@ -347,12 +363,27 @@ public unsafe class DutyFinderModules : TweakBase
         if (!label.Node.IsVisible) label.Node.IsVisible = true;
     }
 
-    private static Vector4 VbmColor(VbmTag tag) => tag switch
+    private Vector4 VbmColor(DutyTags tags) => tags.Vbm switch
     {
-        VbmTag.Pack => PackColor,
+        VbmTag.Pack => tags.PackRank < packColors.Count ? packColors[tags.PackRank] : PackColor,
         VbmTag.Incomplete => IncompleteColor,
         _ => CompleteColor,
     };
+
+    // Every pack with a color, in priority order: the configured ones first, then
+    // any other loaded pack alphabetically, in the default pack blue.
+    private static List<ModulePackColor> PackOrder()
+    {
+        var order = new List<ModulePackColor>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var p in Plugin.Configuration.DutyFinderModulesPackColors)
+            if (p.Pack.Length > 0 && seen.Add(p.Pack))
+                order.Add(new ModulePackColor { Pack = p.Pack, Color = p.Color });
+        foreach (var pack in BossModModules.LoadedPacks ?? [])
+            if (seen.Add(pack))
+                order.Add(new ModulePackColor { Pack = pack, Color = PackColor });
+        return order;
+    }
 
     private static Vector4 BmrColor(BmrTag tag)
     {
@@ -546,7 +577,8 @@ public unsafe class DutyFinderModules : TweakBase
     {
         Legend("VBM", CompleteColor, "has modules");
         Legend("VBM", IncompleteColor, "at least one module is marked incomplete");
-        Legend("VBM", PackColor, "at least one module comes from a module pack");
+        Legend("VBM", PackColor, "at least one module comes from a module pack, in that pack's color:");
+        DrawPackColors();
 
         var bmrInstalled = IsBmrInstalled;
         ImGui.BeginDisabled(!bmrInstalled);
@@ -610,6 +642,92 @@ public unsafe class DutyFinderModules : TweakBase
         }
         ImGui.TextDisabled("Counts update when the Duty Finder opens.");
         ImGui.PopTextWrapPos();
+    }
+
+    private void DrawPackColors()
+    {
+        // The pack list only refreshes on a registry read, which otherwise waits for the Duty Finder.
+        if (IsBossModAvailable && DateTime.UtcNow - packsReadAt > TimeSpan.FromSeconds(5))
+        {
+            packsReadAt = DateTime.UtcNow;
+            BossModModules.Read();
+        }
+
+        var order = PackOrder();
+        ImGui.Indent();
+        if (order.Count == 0)
+        {
+            ImGui.TextDisabled(IsBossModAvailable ? "No module packs loaded." : "Module packs show here once Boss Mod is loaded.");
+            ImGui.Unindent();
+            return;
+        }
+
+        var loaded = BossModModules.LoadedPacks ?? [];
+        var changed = false;
+        int moveFrom = -1, moveTo = -1, reset = -1;
+        for (var i = 0; i < order.Count; ++i)
+        {
+            var entry = order[i];
+            ImGui.BeginDisabled(i == 0);
+            if (ImGui.ArrowButton($"##DutyFinderModulesPackUp{i}", ImGuiDir.Up)) (moveFrom, moveTo) = (i, i - 1);
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Move up: a duty with modules from several packs takes the color of the highest one.");
+            ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+            ImGui.BeginDisabled(i == order.Count - 1);
+            if (ImGui.ArrowButton($"##DutyFinderModulesPackDown{i}", ImGuiDir.Down)) (moveFrom, moveTo) = (i, i + 1);
+            ImGui.EndDisabled();
+
+            ImGui.SameLine();
+            var color = entry.Color;
+            if (ImGui.ColorEdit4($"##DutyFinderModulesPackColor{i}", ref color, ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoAlpha))
+            {
+                entry.Color = color with { W = 1f };
+                changed = true;
+            }
+
+            ImGui.SameLine();
+            ImGui.AlignTextToFramePadding();
+            var isLoaded = loaded.Contains(entry.Pack);
+            ImGui.TextColored(entry.Color, entry.Pack);
+            if (!isLoaded)
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled("(not loaded)");
+            }
+
+            if (entry.Color != PackColor || !isLoaded)
+            {
+                ImGui.SameLine();
+                if (ImGui.SmallButton($"{(isLoaded ? "Reset" : "Remove")}##DutyFinderModulesPackReset{i}")) reset = i;
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(isLoaded ? "Back to the default pack blue." : "Forget this pack's color.");
+            }
+        }
+        ImGui.Unindent();
+
+        if (moveFrom >= 0)
+        {
+            (order[moveFrom], order[moveTo]) = (order[moveTo], order[moveFrom]);
+            changed = true;
+        }
+        if (reset >= 0)
+        {
+            if (loaded.Contains(order[reset].Pack)) order[reset].Color = PackColor;
+            else order.RemoveAt(reset);
+            changed = true;
+        }
+        if (changed)
+        {
+            // Kept as the whole list, so the order shown is the order kept.
+            Plugin.Configuration.DutyFinderModulesPackColors = order;
+            packSavePending = true;
+            stale = true;
+        }
+        // Dragging in the color picker changes it every frame; write the file once it's let go.
+        if (packSavePending && !ImGui.IsAnyItemActive())
+        {
+            packSavePending = false;
+            Plugin.Configuration.Save();
+        }
     }
 
     private static void Legend(string text, Vector4 color, string meaning)

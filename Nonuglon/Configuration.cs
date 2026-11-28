@@ -2,6 +2,7 @@
 using Dalamud.Game.Text;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace Nonuglon;
 
@@ -61,6 +62,10 @@ public class Configuration : IPluginConfiguration
     public bool DutyFinderModulesCompact { get; set; } = false;
     /// <summary>Say in chat when a boss with an incomplete vbm module is pulled.</summary>
     public bool DutyFinderModulesTestingCheck { get; set; } = false;
+    /// <summary>VBM tag colors per module pack, in priority order: a duty with
+    /// modules from several packs takes the first one listed. A pack not listed
+    /// uses the default pack blue.</summary>
+    public List<ModulePackColor> DutyFinderModulesPackColors { get; set; } = new();
 
     public bool NavigateFlagEnabled { get; set; } = false;
     /// <summary>Mount (roulette) before travelling, when allowed.</summary>
@@ -155,4 +160,13 @@ public class AutoPillionFavorite
     /// useful for reordering priority (tried in list order) or ruling someone
     /// out temporarily.</summary>
     public bool Enabled { get; set; } = true;
+}
+
+/// <summary>Duty Finder Modules tag color for one vbm module pack, matched by
+/// the pack's assembly name (e.g. "BossMod.Nonu").</summary>
+[Serializable]
+public class ModulePackColor
+{
+    public string Pack { get; set; } = string.Empty;
+    public Vector4 Color { get; set; }
 }

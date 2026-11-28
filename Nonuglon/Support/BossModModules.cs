@@ -7,8 +7,9 @@ using ECommons.Reflection;
 
 namespace Nonuglon.Support;
 
-/// <summary>Boss Mod (vbm) module coverage of one duty.</summary>
-public readonly record struct DutyCoverage(int Modules, int Incomplete, int FromPack);
+/// <summary>Boss Mod (vbm) module coverage of one duty. Packs holds the
+/// assembly names of the module packs (not stock) its modules come from.</summary>
+public readonly record struct DutyCoverage(int Modules, int Incomplete, int FromPack, string[] Packs);
 
 /// <summary>One vbm module, as the Testing check needs it.</summary>
 public readonly record struct ModuleDetails(string TypeName, uint NameId, string Contributors, bool Incomplete);
@@ -24,6 +25,10 @@ public static class BossModModules
 
     /// <summary>Why the last Read returned null, for the config window.</summary>
     public static string? LastError { get; private set; }
+
+    /// <summary>Assembly names of every module pack vbm had loaded at the last
+    /// Read (enabled or not), sorted; null until the first successful Read.</summary>
+    public static IReadOnlyList<string>? LoadedPacks { get; private set; }
 
     public static Dictionary<uint, DutyCoverage>? Read()
     {
@@ -61,9 +66,14 @@ public static class BossModModules
         var (disabledModules, disabledCategories) = ReadDisabled(registry.GetField("_config", Static)?.GetValue(null));
 
         var byCfc = new Dictionary<uint, DutyCoverage>();
+        var packsByCfc = new Dictionary<uint, SortedSet<string>>();
+        var loadedPacks = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var info in modules.Values)
         {
-            if (info == null || groupType.GetValue(info)?.ToString() != "CFC") continue;
+            if (info == null) continue;
+            var pack = PackName(moduleType.GetValue(info) as Type);
+            if (pack != null) loadedPacks.Add(pack);
+            if (groupType.GetValue(info)?.ToString() != "CFC") continue;
             var cfc = Convert.ToUInt32(groupId.GetValue(info));
             if (cfc == 0) continue;
 
@@ -72,11 +82,26 @@ public static class BossModModules
             if (type != null && disabledModules.Contains(type.ToString())) continue;
             if (disabledCategories.Contains(category.GetValue(info)?.ToString() ?? "")) continue;
 
-            var fromPack = type != null && !StockAssemblies.Contains(type.Assembly.GetName().Name ?? "");
+            var fromPack = PackName(type);
+            if (fromPack != null)
+            {
+                if (!packsByCfc.TryGetValue(cfc, out var set)) packsByCfc[cfc] = set = new(StringComparer.Ordinal);
+                set.Add(fromPack);
+            }
             byCfc.TryGetValue(cfc, out var c);
-            byCfc[cfc] = new(c.Modules + 1, c.Incomplete + ((bool)incomplete.GetValue(info)! ? 1 : 0), c.FromPack + (fromPack ? 1 : 0));
+            byCfc[cfc] = new(c.Modules + 1, c.Incomplete + ((bool)incomplete.GetValue(info)! ? 1 : 0), c.FromPack + (fromPack != null ? 1 : 0), []);
         }
+        foreach (var (cfc, set) in packsByCfc)
+            byCfc[cfc] = byCfc[cfc] with { Packs = [.. set] };
+        LoadedPacks = [.. loadedPacks];
         return byCfc;
+    }
+
+    // The module's assembly name when it comes from a pack, null for vbm's own modules.
+    private static string? PackName(Type? type)
+    {
+        var name = type?.Assembly.GetName().Name;
+        return name == null || StockAssemblies.Contains(name) ? null : name;
     }
 
     /// <summary>The enabled CFC modules of one duty, by primary actor OID (null
