@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -270,7 +271,11 @@ public unsafe class ExtractAllMateria : TweakBase
 
     // -- Pandora's Box handoff --
 
-    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs _) => CheckPandora();
+    // Only Pandora's own load/unload matters; any other plugin changing is noise.
+    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args)
+    {
+        if (args.AffectedInternalNames.Contains(PluginDetection.PandorasBoxInternalName)) CheckPandora();
+    }
 
     private void CheckPandora()
     {

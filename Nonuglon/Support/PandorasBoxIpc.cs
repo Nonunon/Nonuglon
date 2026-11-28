@@ -17,10 +17,11 @@ public static class PandorasBoxIpc
     private static readonly ICallGateSubscriber<string, bool, object> setEnabled =
         Svc.PluginInterface.GetIpcSubscriber<string, bool, object>("PandorasBox.SetFeatureEnabledInternal");
 
-    /// <summary>Null when Pandora isn't loaded or doesn't know the feature.</summary>
+    /// <summary>Null when Pandora isn't loaded, hasn't registered its IPC yet
+    /// (normal right after it loads), or doesn't know the feature.</summary>
     public static bool? GetFeatureEnabled(string featureClass)
     {
-        if (!IsLoaded) return null;
+        if (!IsLoaded || !getEnabled.HasFunction) return null;
         try { return getEnabled.InvokeFunc(featureClass); }
         catch (Exception ex)
         {
@@ -31,7 +32,7 @@ public static class PandorasBoxIpc
 
     public static bool SetFeatureEnabled(string featureClass, bool enabled)
     {
-        if (!IsLoaded) return false;
+        if (!IsLoaded || !setEnabled.HasAction) return false;
         try
         {
             setEnabled.InvokeAction(featureClass, enabled);
