@@ -130,13 +130,13 @@ public class ConfigWindow : Window, IDisposable
             selectedIndex = index;
         var hovered = ImGui.IsItemHovered();
 
+        // Only the dot carries status color; the name is plain text, greyed when off.
         ImGui.SetCursorPos(rowStart);
-        ImGui.PushStyleColor(ImGuiCol.Text, dotColor);
-        ImGui.TextUnformatted(dotGlyph);
+        ImGui.TextColored(dotColor, dotGlyph);
         ImGui.SameLine();
         var shown = FitText(tweak.Name, rowStart.X + rowWidth - ImGui.GetCursorPosX(), out var cut);
-        ImGui.TextUnformatted(shown);
-        ImGui.PopStyleColor();
+        if (tweak.Enabled) ImGui.TextUnformatted(shown);
+        else ImGui.TextColored(UiColors.Disabled, shown);
 
         if (hovered && cut) ImGui.SetTooltip(tweak.Name);
     }
