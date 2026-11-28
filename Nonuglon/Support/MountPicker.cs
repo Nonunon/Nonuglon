@@ -6,6 +6,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
 using Dalamud.Interface.Textures;
+using Dalamud.Interface.Utility;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -73,7 +74,7 @@ public static unsafe class MountPicker
         ImGui.Checkbox("Owned on this character only##MountPicker", ref ownedOnly);
         ImGui.Separator();
 
-        if (ImGui.BeginChild("##MountPickerList", new Vector2(0, ListHeight * ImGui.GetIO().FontGlobalScale)))
+        if (ImGui.BeginChild("##MountPickerList", new Vector2(0, ListHeight * ImGuiHelpers.GlobalScale)))
         {
             if (ImGui.Selectable("Mount Roulette", mountId == Roulette))
             {

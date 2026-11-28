@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Interface.Utility;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using ECommons.DalamudServices;
@@ -712,7 +713,7 @@ public unsafe class NavigateFlag : TweakBase
         if (config.NavigateFlagUseMount)
         {
             var mountId = config.NavigateFlagMountId;
-            ImGui.SetNextItemWidth(250f * ImGui.GetIO().FontGlobalScale);
+            ImGui.SetNextItemWidth(250f * ImGuiHelpers.GlobalScale);
             if (MountPicker.Draw("Mount##NavigateFlag", ref mountId))
             {
                 config.NavigateFlagMountId = mountId;
@@ -733,7 +734,7 @@ public unsafe class NavigateFlag : TweakBase
             if (config.NavigateFlagMountWhileMoving)
             {
                 var lead = config.NavigateFlagLeadDistance;
-                ImGui.SetNextItemWidth(250f * ImGui.GetIO().FontGlobalScale);
+                ImGui.SetNextItemWidth(250f * ImGuiHelpers.GlobalScale);
                 if (ImGui.SliderFloat("Run-up before flying (y)##NavigateFlag", ref lead, 0f, 30f, "%.0f"))
                 {
                     config.NavigateFlagLeadDistance = lead;
