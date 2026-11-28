@@ -53,9 +53,9 @@ public unsafe class EntrustChocoboDuplicates : TweakBase
 
     private readonly TaskManager taskManager = new();
 
-    /// <summary>Public so ConfigWindow can show a hint when AetherBags isn't
-    /// detected, instead of the tweak's button just silently never appearing.</summary>
-    public static bool IsAetherBagsAvailable => PluginDetection.IsPluginLoaded(AetherBagsPluginInternalName);
+    /// <summary>Drives the "AetherBags not detected" hint and HasWarning, so the
+    /// button doesn't just silently never appear.</summary>
+    private static bool IsAetherBagsAvailable => PluginDetection.IsPluginLoaded(AetherBagsPluginInternalName);
 
     private AddonController? controller;
     private TextButtonNode? button;
