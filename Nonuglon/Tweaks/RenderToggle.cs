@@ -53,9 +53,10 @@ public class RenderToggle : IMiniTweak
         if (disabled == value) return;
         disabled = value;
 
+        // Captured, not the field: a later call may change it before this runs.
         Svc.Framework.RunOnFrameworkThread(() =>
         {
-            if (disabled) RenderDisableManager.PlaceRequest();
+            if (value) RenderDisableManager.PlaceRequest();
             else RenderDisableManager.RemoveRequest();
         });
 
