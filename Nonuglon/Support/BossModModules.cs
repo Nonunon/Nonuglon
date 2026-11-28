@@ -105,19 +105,17 @@ public static class BossModModules
     }
 
     /// <summary>The enabled CFC modules of one duty, by primary actor OID (null
-    /// if vbm can't be read; the reason is in LastError).</summary>
+    /// if vbm can't be read, logged only). Leaves LastError alone: that one
+    /// describes Read, which the config window's tag status shows.</summary>
     public static Dictionary<uint, ModuleDetails>? ReadDuty(uint cfc)
     {
         try
         {
-            var result = ReadDutyInternal(cfc);
-            LastError = null;
-            return result;
+            return ReadDutyInternal(cfc);
         }
         catch (Exception ex)
         {
-            LastError = ex.Message;
-            Svc.Log.Warning(ex, "[DutyFinderModules] Couldn't read Boss Mod's module registry.");
+            Svc.Log.Warning(ex, "[DutyFinderModules] Testing check couldn't read Boss Mod's module registry.");
             return null;
         }
     }
